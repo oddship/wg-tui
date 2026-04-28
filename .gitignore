@@ -1,0 +1,23 @@
+# Binaries
+bin/
+wgt
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output
+dist/
+coverage.out
+*.coverprofile
+
+# Logs
+*.log
+
+# Local cache and temp
+.cache/
+.tmp/
+
+# OS files
+.DS_Store
