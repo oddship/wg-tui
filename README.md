@@ -146,6 +146,7 @@ Search mode:
 - `up` / `down` - move selection while keeping search focused
 - `esc` - clear search, then blur search when already empty
 - `enter` - connect to selected target
+- browse shortcuts do not fire while search is focused
 
 ## Notes
 

@@ -240,17 +240,7 @@ func (m Model) updateBrowseWhileSearching(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case msg.Type == tea.KeyDown:
 		m.moveSelection(1)
 		return m, nil
-	case key.Matches(msg, m.keys.Refresh):
-		m.status = "refreshing..."
-		return m, refreshCmd(m.client)
-	case key.Matches(msg, m.keys.EditConfig):
-		m.openConfigEditor()
-		return m, nil
-	case key.Matches(msg, m.keys.Help):
-		m.toggleHelp()
-		return m, nil
-	case key.Matches(msg, m.keys.Copy):
-		m.copySelectedCommand()
+	case key.Matches(msg, m.keys.Search):
 		return m, nil
 	case key.Matches(msg, m.keys.Clear):
 		m.clearOrBlurSearch()

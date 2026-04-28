@@ -20,11 +20,17 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 	applyDerived(&cfg)
+	if err := validate(cfg); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
 func Save(path string, cfg Config) error {
 	applyDerived(&cfg)
+	if err := validate(cfg); err != nil {
+		return err
+	}
 	b, err := huml.Parser().Marshal(cfg.toMap())
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
