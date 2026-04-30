@@ -72,6 +72,29 @@ Make sure `~/.local/bin` is on your `PATH`, then run:
 wgt
 ```
 
+### Install with Nix
+
+Build and run from this repo:
+
+```bash
+nix run github:oddship/wg-tui
+```
+
+Build the package only:
+
+```bash
+nix build github:oddship/wg-tui
+```
+
+Add it to a flake-based system or Home Manager config:
+
+```nix
+inputs.wg-tui.url = "github:oddship/wg-tui";
+
+# packages
+inputs.wg-tui.packages.${pkgs.system}.default
+```
+
 ### Build locally
 
 ```bash

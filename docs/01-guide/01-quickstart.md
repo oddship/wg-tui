@@ -30,6 +30,20 @@ Then run:
 wgt
 ```
 
+### With Nix
+
+Run directly from the flake:
+
+```bash
+nix run github:oddship/wg-tui
+```
+
+Build the package:
+
+```bash
+nix build github:oddship/wg-tui
+```
+
 ### Build locally
 
 ```bash
