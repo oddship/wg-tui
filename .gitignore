@@ -18,6 +18,8 @@ coverage.out
 # Local cache and temp
 .cache/
 .tmp/
+.codex
+ROADMAP.md
 
 # OS files
 .DS_Store
