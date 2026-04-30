@@ -1,6 +1,6 @@
 # wgt
 
-`wgt` is a small terminal UI for browsing Warpgate targets, searching them locally, and launching native SSH connections.
+`wgt` is a small terminal UI for browsing [Warpgate](https://github.com/warp-tech/warpgate) targets, searching them locally, and launching native SSH connections.
 
 It is built for the common Warpgate workflow:
 - fetch targets via the Warpgate user API using an API token
