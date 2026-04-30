@@ -37,6 +37,41 @@ If your Warpgate SSH policy requires browser approval or SSO, Warpgate handles t
 
 ## Installation
 
+### Install from GitHub releases
+
+Pick the asset that matches your OS and CPU from the [releases page](https://github.com/oddship/wg-tui/releases).
+
+Current asset names:
+
+- `wgt-linux-amd64`
+- `wgt-linux-arm64`
+- `wgt-darwin-amd64`
+- `wgt-darwin-arm64`
+
+Example for Linux x86_64:
+
+```bash
+curl -L -o wgt https://github.com/oddship/wg-tui/releases/latest/download/wgt-linux-amd64
+chmod +x wgt
+mkdir -p ~/.local/bin
+mv wgt ~/.local/bin/
+```
+
+Example for Apple Silicon macOS:
+
+```bash
+curl -L -o wgt https://github.com/oddship/wg-tui/releases/latest/download/wgt-darwin-arm64
+chmod +x wgt
+mkdir -p ~/.local/bin
+mv wgt ~/.local/bin/
+```
+
+Make sure `~/.local/bin` is on your `PATH`, then run:
+
+```bash
+wgt
+```
+
 ### Build locally
 
 ```bash

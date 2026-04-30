@@ -1,6 +1,6 @@
 # Binaries
 bin/
-wgt
+/wgt
 *.exe
 *.exe~
 *.dll

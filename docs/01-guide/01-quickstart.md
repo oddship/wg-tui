@@ -2,7 +2,35 @@
 
 ## Install
 
-Build locally:
+### From GitHub releases
+
+Download the matching binary from the releases page and place it somewhere on your `PATH`.
+
+Linux x86_64:
+
+```bash
+curl -L -o wgt https://github.com/oddship/wg-tui/releases/latest/download/wgt-linux-amd64
+chmod +x wgt
+mkdir -p ~/.local/bin
+mv wgt ~/.local/bin/
+```
+
+Apple Silicon macOS:
+
+```bash
+curl -L -o wgt https://github.com/oddship/wg-tui/releases/latest/download/wgt-darwin-arm64
+chmod +x wgt
+mkdir -p ~/.local/bin
+mv wgt ~/.local/bin/
+```
+
+Then run:
+
+```bash
+wgt
+```
+
+### Build locally
 
 ```bash
 go build -o wgt ./cmd/wgt
