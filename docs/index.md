@@ -1,7 +1,7 @@
 ---
 title: wgt
 layout: landing
-description: Browse Warpgate targets, search locally, and launch native SSH.
+description: Browse Warpgate targets, search locally, launch SSH, and open tunnels.
 ---
 
 # wgt
@@ -33,12 +33,18 @@ Fuzzy search runs locally so target discovery stays fast once cached.
 
 Launches your system `ssh` client using Warpgate's username plus target format.
 </article>
+
+<article class="card">
+<header><h3>Tunnels</h3></header>
+
+Open local forwards through Warpgate from inside the TUI and manage them from a dedicated screen.
+</article>
 </div>
 
 ## What it does
 
-`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, and launches SSH for the selected target.
+`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, launches SSH for the selected target, and can open local tunnels through Warpgate.
 
 ## Status
 
-Early but usable. Current focus is fast target discovery and clean SSH handoff.
+Early but usable. Current focus is fast target discovery, clean SSH handoff, and simple service tunneling.
