@@ -31,6 +31,38 @@ func (m *Model) startForm(edit bool) {
 	m.focusField(0)
 }
 
+func (m *Model) startTunnelForm(target string) {
+	m.pendingTunnelTarget = target
+	m.mode = modeTunnelForm
+	m.formTitle = fmt.Sprintf("Open Tunnel - %s", target)
+
+	remote := ""
+	local := ""
+	if m.tunnelLastRemotePort > 0 {
+		remote = strconv.Itoa(m.tunnelLastRemotePort)
+	}
+	if m.tunnelLastLocalPort > 0 {
+		local = strconv.Itoa(m.tunnelLastLocalPort)
+	}
+	if remote != "" && local == "" {
+		local = remote
+	}
+
+	m.fields = []formField{
+		newField("tunnel.remote_port", "Remote Port", remote, "Service port on the selected target"),
+		newField("tunnel.local_port", "Local Port", local, "Local port to bind on 127.0.0.1"),
+	}
+	m.formIndex = 0
+	m.formStatus = "enter ports and press enter to start tunnel"
+	m.tunnelLocalTouched = strings.TrimSpace(local) != "" && local != remote
+	if !m.tunnelLocalTouched {
+		m.tunnelAutoLocalValue = local
+	} else {
+		m.tunnelAutoLocalValue = ""
+	}
+	m.focusField(0)
+}
+
 func formTitle(edit bool) string {
 	if edit {
 		return "Edit Config"
@@ -64,7 +96,7 @@ func newTextInput(label, value string) textinput.Model {
 	return ti
 }
 
-func (m Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		if m.mode == modeConfig {
@@ -92,6 +124,66 @@ func (m Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.fields[m.formIndex].input, cmd = m.fields[m.formIndex].input.Update(msg)
 	return m, cmd
+}
+
+func (m Model) updateTunnelForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeBrowse
+		m.formStatus = ""
+		m.status = "tunnel cancelled"
+		return m, nil
+	case "tab", "down":
+		m.focusField((m.formIndex + 1) % len(m.fields))
+		return m, nil
+	case "shift+tab", "up":
+		m.focusField((m.formIndex - 1 + len(m.fields)) % len(m.fields))
+		return m, nil
+	case "enter":
+		remotePort, localPort, err := m.tunnelFormPorts()
+		if err != nil {
+			m.formStatus = err.Error()
+			return m, nil
+		}
+		m.tunnelLastRemotePort = remotePort
+		m.tunnelLastLocalPort = localPort
+		m.formStatus = ""
+		return m.startTunnel(m.pendingTunnelTarget, remotePort, localPort)
+	}
+
+	if len(m.fields) == 0 {
+		return m, nil
+	}
+
+	before := m.fields[m.formIndex].input.Value()
+	var cmd tea.Cmd
+	m.fields[m.formIndex].input, cmd = m.fields[m.formIndex].input.Update(msg)
+	after := m.fields[m.formIndex].input.Value()
+	m.syncTunnelFormFields(m.formIndex, before, after)
+	return m, cmd
+}
+
+func (m *Model) syncTunnelFormFields(index int, before, after string) {
+	if len(m.fields) < 2 {
+		return
+	}
+
+	switch m.fields[index].key {
+	case "tunnel.remote_port":
+		localValue := m.fields[1].input.Value()
+		if !m.tunnelLocalTouched || strings.TrimSpace(localValue) == "" || localValue == m.tunnelAutoLocalValue {
+			m.fields[1].input.SetValue(after)
+			m.tunnelAutoLocalValue = after
+			m.tunnelLocalTouched = false
+		}
+	case "tunnel.local_port":
+		if after != m.tunnelAutoLocalValue {
+			m.tunnelLocalTouched = true
+		}
+		if strings.TrimSpace(after) == "" && strings.TrimSpace(before) != "" {
+			m.tunnelLocalTouched = false
+		}
+	}
 }
 
 func (m *Model) focusField(idx int) {
@@ -143,6 +235,27 @@ func (m Model) formConfig() (cfgpkg.Config, error) {
 	return cfg, nil
 }
 
+func (m Model) tunnelFormPorts() (int, int, error) {
+	if strings.TrimSpace(m.pendingTunnelTarget) == "" {
+		return 0, 0, fmt.Errorf("no target selected")
+	}
+
+	values := make(map[string]string, len(m.fields))
+	for _, f := range m.fields {
+		values[f.key] = strings.TrimSpace(f.input.Value())
+	}
+
+	remotePort, err := parseTunnelPort(values["tunnel.remote_port"], "remote")
+	if err != nil {
+		return 0, 0, err
+	}
+	localPort, err := parseTunnelPort(values["tunnel.local_port"], "local")
+	if err != nil {
+		return 0, 0, err
+	}
+	return remotePort, localPort, nil
+}
+
 func parsePort(v string) (int, error) {
 	if v == "" {
 		return cfgpkg.Default().SSH.Port, nil
@@ -150,6 +263,14 @@ func parsePort(v string) (int, error) {
 	p, err := strconv.Atoi(v)
 	if err != nil || p <= 0 {
 		return 0, fmt.Errorf("invalid ssh port")
+	}
+	return p, nil
+}
+
+func parseTunnelPort(v, label string) (int, error) {
+	p, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || p <= 0 || p > 65535 {
+		return 0, fmt.Errorf("invalid %s port", label)
 	}
 	return p, nil
 }
@@ -173,9 +294,20 @@ func deriveSSHHost(cfg *cfgpkg.Config) error {
 }
 
 func (m Model) viewForm() string {
+	helpText := "tab/shift+tab to move - enter to submit"
+	if m.mode == modeConfig {
+		helpText = "tab/shift+tab to move - enter to validate and save - esc to cancel config edit"
+	}
+	if m.mode == modeOnboarding {
+		helpText = "tab/shift+tab to move - enter to validate and save"
+	}
+	if m.mode == modeTunnelForm {
+		helpText = "tab/shift+tab to move - enter to start tunnel - esc to cancel"
+	}
+
 	lines := []string{
-		titleStyle.Render(m.formTitle),
-		mutedStyle.Render("tab/shift+tab to move - enter to validate and save - esc to cancel config edit"),
+		m.viewTopChrome("wgt", m.formTitle, nil),
+		mutedStyle.Render(helpText),
 		"",
 	}
 	for i, f := range m.fields {

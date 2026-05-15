@@ -46,6 +46,7 @@ type KeysConfig struct {
 	Search     []string `koanf:"search"`
 	Clear      []string `koanf:"clear"`
 	Connect    []string `koanf:"connect"`
+	Tunnel     []string `koanf:"tunnel"`
 	Refresh    []string `koanf:"refresh"`
 	EditConfig []string `koanf:"edit_config"`
 	Copy       []string `koanf:"copy"`
@@ -77,6 +78,7 @@ func Default() Config {
 			Search:     []string{"/"},
 			Clear:      []string{"esc"},
 			Connect:    []string{"enter"},
+			Tunnel:     []string{"t"},
 			Refresh:    []string{"r"},
 			EditConfig: []string{"e"},
 			Copy:       []string{"c"},

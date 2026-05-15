@@ -26,6 +26,8 @@ const (
 	modeBrowse mode = iota
 	modeOnboarding
 	modeConfig
+	modeTunnelForm
+	modeTunnel
 )
 
 type Model struct {
@@ -33,6 +35,7 @@ type Model struct {
 	cfg     cfgpkg.Config
 	keys    cfgpkg.KeyMap
 	client  *api.Client
+	tunnel  tunnelSession
 
 	searchBox     textinput.Model
 	searchFocused bool
@@ -47,12 +50,20 @@ type Model struct {
 	index    search.Index
 	snapshot cache.Snapshot
 
-	formTitle  string
-	formIndex  int
-	fields     []formField
-	formStatus string
-	width      int
-	height     int
+	formTitle            string
+	formIndex            int
+	fields               []formField
+	formStatus           string
+	pendingTunnelTarget  string
+	tunnelLastRemotePort int
+	tunnelLastLocalPort  int
+	tunnelLocalTouched   bool
+	tunnelAutoLocalValue string
+	width                int
+	height               int
+	tunnelBack           key.Binding
+	tunnelReconnect      key.Binding
+	tunnelClose          key.Binding
 }
 
 type formField struct {
@@ -95,6 +106,7 @@ func New(cfgPath string) Model {
 		status:    "loading...",
 	}
 	m.help.ShowAll = false
+	m.initTunnelBindings()
 	return m
 }
 
@@ -113,14 +125,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConfigSaved(msg)
 	case sshpkg.ExecFinishedMsg:
 		return m.handleSSHFinished(msg)
+	case tunnelStartedMsg:
+		return m.handleTunnelStarted(msg)
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
+			m.stopTunnel()
 			return m, tea.Quit
 		}
-		if m.mode != modeBrowse {
-			return m.updateForm(msg)
+		switch m.mode {
+		case modeBrowse:
+			return m.updateBrowse(msg)
+		case modeOnboarding, modeConfig:
+			return m.updateConfigForm(msg)
+		case modeTunnelForm:
+			return m.updateTunnelForm(msg)
+		case modeTunnel:
+			return m.updateTunnel(msg)
+		default:
+			return m, nil
 		}
-		return m.updateBrowse(msg)
 	}
 
 	if m.mode == modeBrowse && m.searchFocused {
@@ -153,7 +176,7 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	m.status = msg.status
 
 	if msg.snapshot.FetchedAt.IsZero() || cache.IsStale(msg.snapshot, m.cfg.Cache.TTL) {
-		m.status = joinStatus(msg.status, "refreshing in background...")
+		m.status = joinStatus(m.status, "refreshing in background...")
 		return m, refreshCmd(m.client)
 	}
 
@@ -180,9 +203,9 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 
 	m.applyConfig(msg.cfg)
 	m.applySnapshot(msg.snapshot)
+	m.status = msg.status
 	m.mode = modeBrowse
 	m.formStatus = ""
-	m.status = msg.status
 	return m, nil
 }
 
@@ -220,6 +243,8 @@ func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.openConfigEditor()
 	case key.Matches(msg, m.keys.Connect):
 		return m.connectSelected()
+	case key.Matches(msg, m.keys.Tunnel):
+		m.startTunnelFormForSelection()
 	case key.Matches(msg, m.keys.Copy):
 		m.copySelectedCommand()
 	default:
@@ -323,12 +348,16 @@ func (m *Model) clearSearch() {
 }
 
 func (m *Model) clearOrBlurSearch() {
+	if m.searchFocused {
+		m.blurSearch()
+		m.status = fmt.Sprintf("search blurred - %d targets filtered", len(m.filtered))
+		return
+	}
 	if m.searchBox.Value() != "" {
 		m.clearSearch()
 		return
 	}
-	m.blurSearch()
-	m.status = "search blurred"
+	m.status = "search cleared"
 }
 
 func (m *Model) openConfigEditor() {
@@ -348,7 +377,7 @@ func (m *Model) copySelectedCommand() {
 	if len(m.filtered) == 0 {
 		return
 	}
-	bin, args := sshpkg.Command(m.cfg, m.filtered[m.selected].Name)
+	bin, args := sshpkg.ShellCommand(m.cfg, m.filtered[m.selected].Name)
 	if err := clipboard.WriteAll(bin + " " + strings.Join(args, " ")); err != nil {
 		m.status = err.Error()
 		return
@@ -435,20 +464,31 @@ func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config) tea.Cmd {
 }
 
 func (m Model) View() string {
-	if m.mode != modeBrowse {
+	switch m.mode {
+	case modeBrowse:
+		return m.viewBrowse()
+	case modeTunnel:
+		return m.viewTunnel()
+	default:
 		return m.viewForm()
 	}
-	return m.viewBrowse()
 }
 
 var (
-	titleStyle       = lipgloss.NewStyle().Bold(true)
-	mutedStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	selectedStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-	panelStyle       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
-	headerStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	statusBarStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("230")).Background(lipgloss.Color("238")).Padding(0, 1)
-	searchFocusStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	titleStyle        = lipgloss.NewStyle().Bold(true)
+	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	selectedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	panelStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	headerStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	statusBarStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("230")).Background(lipgloss.Color("238")).Padding(0, 1)
+	searchFocusStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	appBadgeStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("12")).Padding(0, 1)
+	modeActiveStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("205")).Padding(0, 1)
+	modeInactiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(lipgloss.Color("239")).Padding(0, 1)
+	actionsBarStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("230")).Background(lipgloss.Color("236")).Padding(0, 1)
+	actionKeyStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229"))
+	actionDescStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("255"))
+	actionSepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
 )
 
 func (m Model) viewBrowse() string {
@@ -460,7 +500,6 @@ func (m Model) viewBrowse() string {
 	rightWidth := max(28, m.width-leftWidth-4)
 	list := panelStyle.Width(leftWidth).Render(m.listView(leftWidth - 4))
 	detail := panelStyle.Width(rightWidth).Render(m.detailView(rightWidth - 4))
-	header := headerStyle.Render("wgt") + "  " + mutedStyle.Render(m.summaryText())
 	searchLabel := mutedStyle.Render("Search")
 	if m.searchFocused {
 		searchLabel = searchFocusStyle.Render("Search")
@@ -468,12 +507,11 @@ func (m Model) viewBrowse() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 
 	return strings.Join([]string{
-		header,
+		m.viewTopChrome("wgt", m.summaryText(), m.browseHelpBindings().short),
 		searchLabel,
 		m.searchBox.View(),
 		body,
 		statusBarStyle.Width(max(0, m.width-2)).Render(m.status),
-		m.help.View(m.keys),
 	}, "\n")
 }
 
@@ -551,6 +589,85 @@ func (m Model) summaryText() string {
 		parts = append(parts, "typing", "scroll with arrows")
 	}
 	return strings.Join(parts, " - ")
+}
+
+func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) string {
+	header := lipgloss.JoinHorizontal(lipgloss.Center,
+		appBadgeStyle.Render(title),
+		" ",
+		m.viewModeTabs(),
+	)
+	rows := []string{header}
+	if strings.TrimSpace(summary) != "" {
+		rows = append(rows, mutedStyle.Render(summary))
+	}
+	if shortcuts := renderShortcutBar(bindings, m.width); shortcuts != "" {
+		rows = append(rows, shortcuts)
+	}
+	return strings.Join(rows, "\n")
+}
+
+func (m Model) viewModeTabs() string {
+	active := m.currentModeLabel()
+	tabs := []struct {
+		id    string
+		label string
+	}{
+		{id: "browse", label: "browse"},
+		{id: "search", label: "search"},
+		{id: "tunnel-form", label: "tunnel form"},
+		{id: "tunnel", label: "tunnel"},
+		{id: "config", label: "config"},
+		{id: "onboarding", label: "onboarding"},
+	}
+	parts := make([]string, 0, len(tabs))
+	for _, tab := range tabs {
+		style := modeInactiveStyle
+		if tab.id == active {
+			style = modeActiveStyle
+		}
+		parts = append(parts, style.Render(tab.label))
+	}
+	return lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+}
+
+func (m Model) currentModeLabel() string {
+	if m.mode == modeBrowse && m.searchFocused {
+		return "search"
+	}
+	switch m.mode {
+	case modeBrowse:
+		return "browse"
+	case modeTunnelForm:
+		return "tunnel-form"
+	case modeTunnel:
+		return "tunnel"
+	case modeConfig:
+		return "config"
+	case modeOnboarding:
+		return "onboarding"
+	default:
+		return "browse"
+	}
+}
+
+func renderShortcutBar(bindings []key.Binding, width int) string {
+	parts := make([]string, 0, len(bindings))
+	for _, binding := range bindings {
+		if !binding.Enabled() {
+			continue
+		}
+		help := binding.Help()
+		if strings.TrimSpace(help.Key) == "" || strings.TrimSpace(help.Desc) == "" {
+			continue
+		}
+		parts = append(parts, actionKeyStyle.Render(help.Key)+" "+actionDescStyle.Render(help.Desc))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	line := strings.Join(parts, actionSepStyle.Render("  •  "))
+	return actionsBarStyle.Width(max(0, width-2)).Render(line)
 }
 
 func joinStatus(parts ...string) string {

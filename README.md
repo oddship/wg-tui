@@ -1,6 +1,6 @@
 # wgt
 
-`wgt` is a small terminal UI for browsing [Warpgate](https://github.com/warp-tech/warpgate) targets, searching them locally, and launching native SSH connections.
+`wgt` is a small terminal UI for browsing [Warpgate](https://github.com/warp-tech/warpgate) targets, searching them locally, launching native SSH connections, and opening local port-forward tunnels through Warpgate.
 
 It is built for the common Warpgate workflow:
 - fetch targets via the Warpgate user API using an API token
@@ -19,7 +19,8 @@ It is built for the common Warpgate workflow:
 - in-app config editing
 - configurable keybindings via config
 - native `ssh` handoff
-- copy SSH command to clipboard
+- local tunnel mode with a dedicated status page
+- copy SSH or tunnel command to clipboard
 
 ## How it works
 
@@ -33,7 +34,18 @@ When you connect, it launches the system `ssh` binary using Warpgate's target se
 ssh -p <port> -l '<warpgate-username>:<target>' <warpgate-host>
 ```
 
-If your Warpgate SSH policy requires browser approval or SSO, Warpgate handles that in the SSH session.
+Tunnel mode starts from the target list inside the TUI, then opens a small port form and starts a native SSH local forward:
+
+```bash
+ssh -N \
+  -o ExitOnForwardFailure=yes \
+  -L <local-port>:127.0.0.1:<remote-port> \
+  -p <port> \
+  -l '<warpgate-username>:<target>' \
+  <warpgate-host>
+```
+
+If your Warpgate SSH policy requires browser approval or SSO, Warpgate handles that in the SSH session. During tunnel startup, `wgt` may briefly hand control to `ssh` so you can complete approval, then the tunnel is backgrounded and control returns to the TUI.
 
 ## Installation
 
@@ -107,6 +119,16 @@ go build -o wgt ./cmd/wgt
 go run ./cmd/wgt
 ```
 
+### Tunnel mode
+
+Open `wgt`, select a target, then press `t` to open the tunnel form.
+
+The form asks for:
+- remote port
+- local port
+
+When you type a remote port first, the local port mirrors it until you explicitly change the local port. After submission, `wgt` switches to a dedicated tunnel page that shows status and lets you close or reconnect the tunnel.
+
 ## First run
 
 On first launch, `wgt` opens an onboarding flow and asks for:
@@ -174,6 +196,8 @@ keys:
     - "esc"
   connect::
     - "enter"
+  tunnel::
+    - "t"
   refresh::
     - "r"
   edit_config::
@@ -193,22 +217,39 @@ Browse mode:
 - `/` - focus search
 - `j` / `k` or arrow keys - move selection
 - `enter` - connect to selected target
+- `t` - open tunnel form for the selected target
 - `r` - refresh targets from Warpgate
 - `e` - edit config
 - `c` - copy SSH command
 - `?` - toggle help
 - `q` - quit
 
+Tunnel form:
+- type remote and local ports
+- `enter` - start tunnel
+- `esc` - cancel and return to the target list
+
+Tunnel page:
+- `x` - close tunnel
+- `r` - reconnect tunnel
+- `c` - copy tunnel command
+- `b` - close tunnel and return to target list
+- `?` - toggle help
+- `q` - quit
+
 Search mode:
 - type to filter locally
+- printable keys continue editing the query, including `t`
 - `up` / `down` - move selection while keeping search focused
-- `esc` - clear search, then blur search when already empty
+- `esc` - blur search and keep the current filter
+- `esc` again in browse mode - clear the current filter
 - `enter` - connect to selected target
-- browse shortcuts do not fire while search is focused
+- blur search before using browse actions such as `t`
 
 ## Notes
 
 - `wgt` expects you to generate a Warpgate API token in the web UI.
+- Tunnel startup may briefly hand terminal control to `ssh` for approval or login, then return to the TUI once the tunnel is backgrounded.
 - Clipboard support uses `github.com/atotto/clipboard`.
 - On Linux, clipboard support may require `xclip` or `xsel` depending on your environment.
 - `wgt` is cache-first. If cache exists, it starts quickly and refreshes in the background when stale.

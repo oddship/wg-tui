@@ -17,6 +17,7 @@ func validate(cfg Config) error {
 		{name: "search", keys: cfg.Keys.Search},
 		{name: "clear", keys: cfg.Keys.Clear},
 		{name: "connect", keys: cfg.Keys.Connect},
+		{name: "tunnel", keys: cfg.Keys.Tunnel},
 		{name: "refresh", keys: cfg.Keys.Refresh},
 		{name: "edit_config", keys: cfg.Keys.EditConfig},
 		{name: "copy", keys: cfg.Keys.Copy},

@@ -9,7 +9,7 @@
 
 ## 2. Summary
 
-`wgt` is a terminal user interface for browsing Warpgate targets, searching them locally, inspecting basic target metadata, and launching the native `ssh` client against a selected target.
+`wgt` is a terminal user interface for browsing Warpgate targets, searching them locally, inspecting basic target metadata, launching the native `ssh` client against a selected target, and opening native SSH local-forward tunnels through Warpgate.
 
 `wgt` is not a full Warpgate client. Warpgate remains responsible for authentication policy, authorization, auditing, connection brokering, and SSH-side browser approval flows.
 
@@ -20,6 +20,7 @@ The product MUST:
 - make target discovery fast
 - support local fuzzy search over cached target data
 - launch native SSH for the selected target
+- support opening tunnels as an in-app action from the target browser
 - support first-run onboarding inside the TUI
 - store configuration in HUML
 - allow configuration review and editing from inside the TUI
@@ -39,6 +40,7 @@ The product MUST NOT:
 - manage Warpgate admin configuration
 - aim for full Warpgate OpenAPI coverage
 - require a large command-heavy CLI surface for v1
+- support multiple concurrent tunnels in v1
 
 ## 5. Primary User and Workflow
 
@@ -59,7 +61,8 @@ The primary user:
 6. User searches targets locally.
 7. User selects a target and presses the configured connect key.
 8. `wgt` launches native `ssh` using Warpgate's username-plus-target format.
-9. If Warpgate requires browser approval or SSO for SSH, Warpgate handles that within the SSH session.
+9. For tunneling, the user selects a target, opens a tunnel form from the TUI, enters ports, and lands on a dedicated tunnel page.
+10. If Warpgate requires browser approval or SSO for SSH, Warpgate handles that within the SSH session.
 
 ## 6. Product Requirements
 
@@ -73,10 +76,12 @@ The primary user:
 
 The main experience MUST support:
 - opening the app with `wgt`
+- opening a tunnel form from the target browser
 - viewing cached targets immediately when available
 - searching as the user types
 - inspecting selected target metadata in a detail pane
 - launching SSH for the selected target
+- selecting a target, entering tunnel ports, and transitioning to a dedicated tunnel page
 - manually refreshing cached data
 - opening a config screen from within the TUI
 
@@ -107,6 +112,19 @@ The application SHOULD prefer an argument-safe invocation shape such as:
 ```bash
 ssh -p 2222 -l '<warpgate-user>:<target>' <warpgate-host>
 ```
+
+Tunnel mode MUST use a native SSH local forward equivalent to:
+
+```bash
+ssh -N \
+  -o ExitOnForwardFailure=yes \
+  -L <local-port>:127.0.0.1:<remote-port> \
+  -p 2222 \
+  -l '<warpgate-user>:<target>' \
+  <warpgate-host>
+```
+
+Tunnel startup MAY briefly hand terminal control to `ssh` so keyboard-interactive approval, SSO, host key confirmation, or other SSH-side prompts can complete before the tunnel backgrounds and control returns to the TUI.
 
 The implementation MUST avoid shell string interpolation.
 
@@ -198,6 +216,8 @@ keys:
     - "esc"
   connect::
     - "enter"
+  tunnel::
+    - "t"
   refresh::
     - "r"
   edit_config::
@@ -435,11 +455,15 @@ The config model MUST support keybindings for at least:
 - focus search
 - clear or unfocus search
 - connect to selected target
+- open tunnel form for selected target
 - refresh from API
 - open config editor
 - copy SSH command
 - toggle help
 - quit
+
+Tunnel-page-only controls MAY remain hardcoded in v1, provided help text reflects them accurately.
+The browse action that opens the tunnel form MUST be configurable.
 
 ### 15.4 Validation
 
@@ -448,6 +472,8 @@ The implementation SHOULD validate keybindings and reject obvious collisions for
 The implementation MAY keep a safe emergency quit such as `ctrl+c` even if not user-configurable.
 
 ## 16. SSH Launch Behavior
+
+### 16.1 Interactive shell mode
 
 When the user selects a target, the application MUST:
 1. resolve SSH host and port
@@ -458,6 +484,22 @@ The implementation MUST pass arguments without shell interpolation.
 
 The implementation SHOULD verify the safest OpenSSH invocation for usernames containing `@`.
 Using `-l` is currently the preferred direction.
+
+### 16.2 Tunnel mode
+
+Tunnel mode MUST:
+- start from the normal target browser
+- open from a target-scoped tunnel action in the TUI
+- show a small form for remote and local port entry before tunnel startup
+- default local port entry to the remote port until the user explicitly changes it
+- transition to a dedicated tunnel page after successful form submission
+- manage at most one active tunnel process at a time
+- allow the user to close the tunnel, reconnect it, copy the tunnel command, return to the list, and quit the app
+- close the active tunnel when quitting the app
+- close the active tunnel before returning to the list in v1
+- surface tunnel lifecycle states including opening, open, closed, and failed
+- allow SSH-side approval or login prompts during tunnel startup before returning to the TUI
+- surface concise stderr or exit-error summaries when tunnel startup or runtime fails
 
 ## 17. HTTP Client Requirements
 
@@ -545,6 +587,7 @@ internal/ui/
 - manual refresh
 - config view/edit screen
 - SSH launch
+- tunnel mode with dedicated tunnel page
 
 ### 21.2 Milestone 2
 
@@ -580,4 +623,5 @@ v1 is acceptable when all of the following are true:
 - `wgt` can refresh targets manually from the UI
 - `wgt` can open and save config from inside the TUI
 - `wgt` can launch native SSH for the selected target
-- keybindings are read from config rather than being hardwired
+- `wgt` can open a tunnel form from the target browser and manage a single active tunnel from a dedicated page
+- keybindings are read from config rather than being hardwired, except for tunnel-page-local controls in v1
