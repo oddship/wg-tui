@@ -1,7 +1,7 @@
 ---
 title: wgt
 layout: landing
-description: Browse Warpgate targets, search locally, launch SSH, and open tunnels.
+description: Browse Warpgate targets, search locally, launch SSH, open tunnels, and run file transfers.
 ---
 
 # wgt
@@ -39,12 +39,18 @@ Launches your system `ssh` client using Warpgate's username plus target format.
 
 Open local forwards through Warpgate from inside the TUI and manage them from a dedicated screen.
 </article>
+
+<article class="card">
+<header><h3>Transfers</h3></header>
+
+Run `rsync` or `scp` uploads and downloads through Warpgate without leaving the TUI.
+</article>
 </div>
 
 ## What it does
 
-`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, launches SSH for the selected target, and can open local tunnels through Warpgate.
+`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, launches SSH for the selected target, can open local tunnels through Warpgate, and can run quick file transfers through the selected target.
 
 ## Status
 
-Early but usable. Current focus is fast target discovery, clean SSH handoff, and simple service tunneling.
+Early but usable. Current focus is fast target discovery, clean SSH handoff, simple service tunneling, and practical transfer workflows.
