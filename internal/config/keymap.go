@@ -9,6 +9,7 @@ type KeyMap struct {
 	Clear      key.Binding
 	Connect    key.Binding
 	Tunnel     key.Binding
+	Rsync      key.Binding
 	Refresh    key.Binding
 	EditConfig key.Binding
 	Copy       key.Binding
@@ -24,6 +25,7 @@ func NewKeyMap(cfg KeysConfig) KeyMap {
 		Clear:      bind(cfg.Clear, "esc", "clear"),
 		Connect:    bind(cfg.Connect, "enter", "connect"),
 		Tunnel:     bindTunnel(cfg),
+		Rsync:      bindRsync(cfg),
 		Refresh:    bind(cfg.Refresh, "r", "refresh"),
 		EditConfig: bind(cfg.EditConfig, "e", "config"),
 		Copy:       bind(cfg.Copy, "c", "copy ssh"),
@@ -33,11 +35,11 @@ func NewKeyMap(cfg KeysConfig) KeyMap {
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Search, k.Connect, k.Tunnel, k.Refresh, k.Quit}
+	return []key.Binding{k.Search, k.Connect, k.Tunnel, k.Rsync, k.Refresh, k.Quit}
 }
 
 func (k KeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.Search, k.Clear, k.Connect, k.Tunnel}, {k.Refresh, k.EditConfig, k.Copy, k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.Search, k.Clear, k.Connect, k.Tunnel, k.Rsync}, {k.Refresh, k.EditConfig, k.Copy, k.Help, k.Quit}}
 }
 
 func bind(keys []string, label, desc string) key.Binding {
@@ -57,6 +59,16 @@ func bindTunnel(cfg KeysConfig) key.Binding {
 	return bind(nil, "t", "tunnel")
 }
 
+func bindRsync(cfg KeysConfig) key.Binding {
+	if len(cfg.Rsync) > 0 {
+		return bind(cfg.Rsync, "s", "rsync")
+	}
+	if keyUsedElsewhere(cfg, "s") {
+		return key.NewBinding()
+	}
+	return bind(nil, "s", "rsync")
+}
+
 func keyUsedElsewhere(cfg KeysConfig, candidate string) bool {
 	bindings := [][]string{
 		cfg.Up,
@@ -64,6 +76,8 @@ func keyUsedElsewhere(cfg KeysConfig, candidate string) bool {
 		cfg.Search,
 		cfg.Clear,
 		cfg.Connect,
+		cfg.Tunnel,
+		cfg.Rsync,
 		cfg.Refresh,
 		cfg.EditConfig,
 		cfg.Copy,

@@ -59,6 +59,16 @@ func (m *Model) startTunnelFormForSelection() {
 	m.startTunnelForm(m.filtered[m.selected].Name)
 }
 
+func (m Model) startRsyncFormForSelection() (tea.Model, tea.Cmd) {
+	if len(m.filtered) == 0 {
+		m.status = "no target selected"
+		return m, nil
+	}
+	m.blurSearch()
+	m.startRsyncForm(m.filtered[m.selected].Name)
+	return m, nil
+}
+
 func (m Model) updateTunnel(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, m.keys.Quit):
@@ -239,9 +249,10 @@ func (m Model) tunnelHelpBindings() helpBindings {
 func (m Model) browseHelpBindings() helpBindings {
 	connectBinding := cloneBinding(m.keys.Connect, "connect")
 	tunnelBinding := cloneBinding(m.keys.Tunnel, "tunnel")
+	rsyncBinding := cloneBinding(m.keys.Rsync, "rsync")
 	copyBinding := cloneBinding(m.keys.Copy, "copy ssh")
-	short := []key.Binding{m.keys.Search, connectBinding, tunnelBinding, m.keys.Refresh, m.keys.Quit}
-	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding}, {m.keys.Refresh, m.keys.EditConfig, copyBinding, m.keys.Help, m.keys.Quit}}
+	short := []key.Binding{m.keys.Search, connectBinding, tunnelBinding, rsyncBinding, m.keys.Refresh, m.keys.Quit}
+	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding, rsyncBinding}, {m.keys.Refresh, m.keys.EditConfig, copyBinding, m.keys.Help, m.keys.Quit}}
 	return helpBindings{short: short, full: full}
 }
 

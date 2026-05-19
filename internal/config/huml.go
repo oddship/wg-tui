@@ -22,6 +22,9 @@ func Load(path string) (Config, error) {
 	if !k.Exists("keys.tunnel") {
 		cfg.Keys.Tunnel = nil
 	}
+	if !k.Exists("keys.rsync") {
+		cfg.Keys.Rsync = nil
+	}
 	applyDerived(&cfg)
 	if err := validate(cfg); err != nil {
 		return Config{}, err
@@ -80,6 +83,7 @@ func (k KeysConfig) toMap() map[string]any {
 		"clear":       k.Clear,
 		"connect":     k.Connect,
 		"tunnel":      k.Tunnel,
+		"rsync":       k.Rsync,
 		"refresh":     k.Refresh,
 		"edit_config": k.EditConfig,
 		"copy":        k.Copy,

@@ -27,6 +27,7 @@ const (
 	modeOnboarding
 	modeConfig
 	modeTunnelForm
+	modeRsyncForm
 	modeTunnel
 )
 
@@ -55,6 +56,13 @@ type Model struct {
 	fields               []formField
 	formStatus           string
 	pendingTunnelTarget  string
+	pendingRsyncTarget   string
+	rsyncLastTool        string
+	rsyncLastDirection   string
+	rsyncLastRsyncFlags  string
+	rsyncLastScpFlags    string
+	rsyncLastLocalPath   string
+	rsyncLastRemotePath  string
 	tunnelLastRemotePort int
 	tunnelLastLocalPort  int
 	tunnelLocalTouched   bool
@@ -67,15 +75,18 @@ type Model struct {
 }
 
 type formField struct {
-	key   string
-	label string
-	input textinput.Model
-	hint  string
+	key         string
+	label       string
+	input       textinput.Model
+	hint        string
+	options     []string
+	optionIndex int
 }
 
 type loadedMsg struct {
 	cfg      cfgpkg.Config
 	snapshot cache.Snapshot
+	state    cache.State
 	status   string
 	err      error
 }
@@ -127,6 +138,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSSHFinished(msg)
 	case tunnelStartedMsg:
 		return m.handleTunnelStarted(msg)
+	case rsyncFinishedMsg:
+		return m.handleRsyncFinished(msg)
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			m.stopTunnel()
@@ -139,6 +152,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfigForm(msg)
 		case modeTunnelForm:
 			return m.updateTunnelForm(msg)
+		case modeRsyncForm:
+			return m.updateRsyncForm(msg)
 		case modeTunnel:
 			return m.updateTunnel(msg)
 		default:
@@ -171,6 +186,7 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.applyConfig(msg.cfg)
+	m.applyState(msg.state)
 	m.snapshot = msg.snapshot
 	m.setTargets(msg.snapshot.Targets)
 	m.status = msg.status
@@ -218,6 +234,15 @@ func (m Model) handleSSHFinished(msg sshpkg.ExecFinishedMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+func (m Model) handleRsyncFinished(msg rsyncFinishedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.status = fmt.Sprintf("%s %s failed: %v", msg.tool, msg.direction, msg.err)
+		return m, nil
+	}
+	m.status = fmt.Sprintf("%s %s complete", msg.tool, msg.direction)
+	return m, nil
+}
+
 func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.searchFocused {
 		return m.updateBrowseWhileSearching(msg)
@@ -245,6 +270,8 @@ func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.connectSelected()
 	case key.Matches(msg, m.keys.Tunnel):
 		m.startTunnelFormForSelection()
+	case key.Matches(msg, m.keys.Rsync):
+		return m.startRsyncFormForSelection()
 	case key.Matches(msg, m.keys.Copy):
 		m.copySelectedCommand()
 	default:
@@ -288,6 +315,35 @@ func (m *Model) applyConfig(cfg cfgpkg.Config) {
 	m.cfg = cfg
 	m.keys = cfgpkg.NewKeyMap(cfg.Keys)
 	m.client = api.New(cfg)
+}
+
+func (m *Model) applyState(state cache.State) {
+	m.rsyncLastTool = state.Transfer.Tool
+	m.rsyncLastDirection = state.Transfer.Direction
+	m.rsyncLastRsyncFlags = state.Transfer.RsyncFlags
+	m.rsyncLastScpFlags = state.Transfer.ScpFlags
+	m.rsyncLastLocalPath = state.Transfer.LocalPath
+	m.rsyncLastRemotePath = state.Transfer.RemotePath
+}
+
+func (m Model) stateSnapshot() cache.State {
+	return cache.State{
+		Transfer: cache.TransferState{
+			Tool:       m.rsyncLastTool,
+			Direction:  m.rsyncLastDirection,
+			RsyncFlags: m.rsyncLastRsyncFlags,
+			ScpFlags:   m.rsyncLastScpFlags,
+			LocalPath:  m.rsyncLastLocalPath,
+			RemotePath: m.rsyncLastRemotePath,
+		},
+	}
+}
+
+func (m *Model) persistState() {
+	if strings.TrimSpace(m.cfg.Cache.Dir) == "" {
+		return
+	}
+	_ = cache.SaveState(m.cfg.Cache.Dir, m.stateSnapshot())
 }
 
 func (m *Model) applySnapshot(snap cache.Snapshot) {
@@ -400,6 +456,7 @@ func loadCmd(cfgPath string) tea.Cmd {
 		}
 
 		snap, err := cache.Load(cfg.Cache.Dir)
+		state, stateErr := cache.LoadState(cfg.Cache.Dir)
 		status := "loaded config"
 		switch {
 		case err == nil:
@@ -408,7 +465,11 @@ func loadCmd(cfgPath string) tea.Cmd {
 			status = "cache unavailable"
 		}
 
-		return loadedMsg{cfg: cfg, snapshot: snap, status: status}
+		if stateErr != nil && !cache.Missing(stateErr) {
+			status = joinStatus(status, "state unavailable")
+		}
+
+		return loadedMsg{cfg: cfg, snapshot: snap, state: state, status: status}
 	}
 }
 
@@ -616,6 +677,7 @@ func (m Model) viewModeTabs() string {
 		{id: "browse", label: "browse"},
 		{id: "search", label: "search"},
 		{id: "tunnel-form", label: "tunnel form"},
+		{id: "rsync-form", label: "rsync form"},
 		{id: "tunnel", label: "tunnel"},
 		{id: "config", label: "config"},
 		{id: "onboarding", label: "onboarding"},
@@ -640,6 +702,8 @@ func (m Model) currentModeLabel() string {
 		return "browse"
 	case modeTunnelForm:
 		return "tunnel-form"
+	case modeRsyncForm:
+		return "rsync-form"
 	case modeTunnel:
 		return "tunnel"
 	case modeConfig:

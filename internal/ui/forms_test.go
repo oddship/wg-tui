@@ -2,6 +2,84 @@ package ui
 
 import "testing"
 
+func TestParseTransferFlagsSplitsWords(t *testing.T) {
+	got := parseTransferFlags("-avz --delete --exclude tmp")
+	want := []string{"-avz", "--delete", "--exclude", "tmp"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d flags, got %d: %#v", len(want), len(got), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("flag %d: want %q got %q", i, want[i], got[i])
+		}
+	}
+}
+
+func TestDefaultTransferFlags(t *testing.T) {
+	if got := defaultTransferFlags("rsync"); got != "-avz" {
+		t.Fatalf("unexpected rsync default flags: %q", got)
+	}
+	if got := defaultTransferFlags("scp"); got != "-C -p" {
+		t.Fatalf("unexpected scp default flags: %q", got)
+	}
+}
+
+func TestParseTransferToolAliases(t *testing.T) {
+	cases := map[string]string{
+		"rsync": "rsync",
+		"sync":  "rsync",
+		"scp":   "scp",
+		"copy":  "scp",
+	}
+	for input, want := range cases {
+		got, err := parseTransferTool(input)
+		if err != nil {
+			t.Fatalf("parseTransferTool(%q): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("expected %q for %q, got %q", want, input, got)
+		}
+	}
+}
+
+func TestParseTransferToolRejectsInvalidValue(t *testing.T) {
+	if _, err := parseTransferTool("tar"); err == nil {
+		t.Fatal("expected invalid transfer tool to fail")
+	}
+}
+
+func TestParseRsyncDirectionUploadAliases(t *testing.T) {
+	cases := []string{"upload", "up", "push", "host-to-remote", "local-to-remote"}
+	for _, input := range cases {
+		got, err := parseRsyncDirection(input)
+		if err != nil {
+			t.Fatalf("parseRsyncDirection(%q): %v", input, err)
+		}
+		if got != "upload" {
+			t.Fatalf("expected upload for %q, got %q", input, got)
+		}
+	}
+}
+
+func TestParseRsyncDirectionDownloadAliases(t *testing.T) {
+	cases := []string{"download", "down", "pull", "remote-to-host", "remote-to-local"}
+	for _, input := range cases {
+		got, err := parseRsyncDirection(input)
+		if err != nil {
+			t.Fatalf("parseRsyncDirection(%q): %v", input, err)
+		}
+		if got != "download" {
+			t.Fatalf("expected download for %q, got %q", input, got)
+		}
+	}
+}
+
+func TestParseRsyncDirectionRejectsInvalidValue(t *testing.T) {
+	if _, err := parseRsyncDirection("sideways"); err == nil {
+		t.Fatal("expected invalid rsync direction to fail")
+	}
+}
+
 func TestParseTunnelPort(t *testing.T) {
 	port, err := parseTunnelPort("8000", "remote")
 	if err != nil {
@@ -65,5 +143,106 @@ func TestStartTunnelFormPreservesRememberedCustomLocalPort(t *testing.T) {
 
 	if got := m.fields[1].input.Value(); got != "9000" {
 		t.Fatalf("expected remembered custom local port to stay unchanged, got %q", got)
+	}
+}
+
+func TestStartRsyncFormUsesSelectFieldsForToolAndDirection(t *testing.T) {
+	m := New("test")
+	m.startRsyncForm("svc")
+
+	if !m.fields[0].isSelect() {
+		t.Fatal("expected tool field to be selectable")
+	}
+	if !m.fields[1].isSelect() {
+		t.Fatal("expected direction field to be selectable")
+	}
+	if got := m.fields[0].input.Value(); got != "rsync" {
+		t.Fatalf("expected default tool rsync, got %q", got)
+	}
+	if got := m.fields[1].input.Value(); got != "upload" {
+		t.Fatalf("expected default direction upload, got %q", got)
+	}
+	if got := m.fields[2].input.Value(); got != "-avz" {
+		t.Fatalf("expected default flags -avz, got %q", got)
+	}
+}
+
+func TestShiftFieldOptionCyclesSelectValues(t *testing.T) {
+	m := New("test")
+	m.startRsyncForm("svc")
+
+	m.shiftFieldOption(0, 1)
+	if got := m.fields[0].input.Value(); got != "scp" {
+		t.Fatalf("expected tool to cycle to scp, got %q", got)
+	}
+	if got := m.fields[2].input.Value(); got != "-C -p" {
+		t.Fatalf("expected flags to switch to scp defaults, got %q", got)
+	}
+
+	m.shiftFieldOption(1, 1)
+	if got := m.fields[1].input.Value(); got != "download" {
+		t.Fatalf("expected direction to cycle to download, got %q", got)
+	}
+
+	m.shiftFieldOption(1, 1)
+	if got := m.fields[1].input.Value(); got != "upload" {
+		t.Fatalf("expected direction to wrap to upload, got %q", got)
+	}
+}
+
+func TestRememberTransferDraftTracksPathsWhileEditing(t *testing.T) {
+	m := New("test")
+	m.startRsyncForm("svc")
+
+	m.fields[3].input.SetValue("./dist")
+	m.rememberTransferDraft(3)
+	m.fields[4].input.SetValue("/srv/app")
+	m.rememberTransferDraft(4)
+
+	if got := m.rsyncLastLocalPath; got != "./dist" {
+		t.Fatalf("expected remembered local path, got %q", got)
+	}
+	if got := m.rsyncLastRemotePath; got != "/srv/app" {
+		t.Fatalf("expected remembered remote path, got %q", got)
+	}
+}
+
+func TestStartRsyncFormReusesRememberedPaths(t *testing.T) {
+	m := New("test")
+	m.rsyncLastLocalPath = "./dist"
+	m.rsyncLastRemotePath = "/srv/app"
+	m.startRsyncForm("svc")
+
+	if got := m.fields[3].input.Value(); got != "./dist" {
+		t.Fatalf("expected remembered local path in form, got %q", got)
+	}
+	if got := m.fields[4].input.Value(); got != "/srv/app" {
+		t.Fatalf("expected remembered remote path in form, got %q", got)
+	}
+}
+
+func TestStartRsyncFormSetsConditionalHintsForUpload(t *testing.T) {
+	m := New("test")
+	m.startRsyncForm("svc")
+
+	if got := m.fields[3].hint; got != "Source path on this machine" {
+		t.Fatalf("unexpected local upload hint: %q", got)
+	}
+	if got := m.fields[4].hint; got != "Destination path on the target" {
+		t.Fatalf("unexpected remote upload hint: %q", got)
+	}
+}
+
+func TestShiftFieldOptionUpdatesConditionalHintsForDownload(t *testing.T) {
+	m := New("test")
+	m.startRsyncForm("svc")
+
+	m.shiftFieldOption(1, 1)
+
+	if got := m.fields[3].hint; got != "Destination path on this machine" {
+		t.Fatalf("unexpected local download hint: %q", got)
+	}
+	if got := m.fields[4].hint; got != "Source path on the target" {
+		t.Fatalf("unexpected remote download hint: %q", got)
 	}
 }

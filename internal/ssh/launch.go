@@ -34,6 +34,55 @@ func Command(cfg cfgpkg.Config, target string) (string, []string) {
 	return ShellCommand(cfg, target)
 }
 
+func RsyncCommand(cfg cfgpkg.Config, target, direction string, flags []string, localPath, remotePath string) (string, []string, error) {
+	direction = strings.ToLower(strings.TrimSpace(direction))
+	if direction != "upload" && direction != "download" {
+		return "", nil, fmt.Errorf("invalid rsync direction: %s", direction)
+	}
+	if strings.TrimSpace(localPath) == "" {
+		return "", nil, fmt.Errorf("local path is required")
+	}
+	if strings.TrimSpace(remotePath) == "" {
+		return "", nil, fmt.Errorf("remote path is required")
+	}
+
+	remoteShell := shellJoin(rsyncSSHArgs(cfg, target))
+	remoteEndpoint := fmt.Sprintf("%s:%s", cfg.SSH.Host, remotePath)
+
+	args := append([]string{}, flags...)
+	args = append(args, "-e", remoteShell)
+	if direction == "upload" {
+		args = append(args, localPath, remoteEndpoint)
+	} else {
+		args = append(args, remoteEndpoint, localPath)
+	}
+	return "rsync", args, nil
+}
+
+func ScpCommand(cfg cfgpkg.Config, target, direction string, flags []string, localPath, remotePath string) (string, []string, error) {
+	direction = strings.ToLower(strings.TrimSpace(direction))
+	if direction != "upload" && direction != "download" {
+		return "", nil, fmt.Errorf("invalid scp direction: %s", direction)
+	}
+	if strings.TrimSpace(localPath) == "" {
+		return "", nil, fmt.Errorf("local path is required")
+	}
+	if strings.TrimSpace(remotePath) == "" {
+		return "", nil, fmt.Errorf("remote path is required")
+	}
+
+	remoteEndpoint := fmt.Sprintf("%s:%s", cfg.SSH.Host, remotePath)
+	args := append([]string{}, flags...)
+	args = append(args, "-P", strconv.Itoa(cfg.SSH.Port), "-o", fmt.Sprintf("User=%s:%s", cfg.SSH.Username, target))
+	args = append(args, cfg.SSH.ExtraArgs...)
+	if direction == "upload" {
+		args = append(args, localPath, remoteEndpoint)
+	} else {
+		args = append(args, remoteEndpoint, localPath)
+	}
+	return "scp", args, nil
+}
+
 func ExecCmd(cfg cfgpkg.Config, target string) tea.Cmd {
 	bin, args := ShellCommand(cfg, target)
 	cmd := exec.Command(bin, args...)
@@ -170,4 +219,28 @@ func baseArgs(cfg cfgpkg.Config, target string) []string {
 	args = append(args, cfg.SSH.ExtraArgs...)
 	args = append(args, cfg.SSH.Host)
 	return args
+}
+
+func rsyncSSHArgs(cfg cfgpkg.Config, target string) []string {
+	args := []string{cfg.SSH.Binary, "-p", strconv.Itoa(cfg.SSH.Port), "-l", fmt.Sprintf("%s:%s", cfg.SSH.Username, target)}
+	args = append(args, cfg.SSH.ExtraArgs...)
+	return args
+}
+
+func shellJoin(parts []string) string {
+	quoted := make([]string, 0, len(parts))
+	for _, part := range parts {
+		quoted = append(quoted, shellQuote(part))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(value, " \t\n'\"\\$&;|<>*?()[]{}!#~:@") {
+		return value
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
 }

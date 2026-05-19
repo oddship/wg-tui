@@ -47,6 +47,7 @@ type KeysConfig struct {
 	Clear      []string `koanf:"clear"`
 	Connect    []string `koanf:"connect"`
 	Tunnel     []string `koanf:"tunnel"`
+	Rsync      []string `koanf:"rsync"`
 	Refresh    []string `koanf:"refresh"`
 	EditConfig []string `koanf:"edit_config"`
 	Copy       []string `koanf:"copy"`
@@ -79,6 +80,7 @@ func Default() Config {
 			Clear:      []string{"esc"},
 			Connect:    []string{"enter"},
 			Tunnel:     []string{"t"},
+			Rsync:      []string{"s"},
 			Refresh:    []string{"r"},
 			EditConfig: []string{"e"},
 			Copy:       []string{"c"},
