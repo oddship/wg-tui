@@ -104,9 +104,14 @@ type configSavedMsg struct {
 	err      error
 }
 
+const (
+	searchPlaceholderIdle    = "Type / to search targets"
+	searchPlaceholderFocused = "Type to search - esc to exit"
+)
+
 func New(cfgPath string) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Type / to search targets"
+	ti.Placeholder = searchPlaceholderIdle
 	ti.Prompt = "search> "
 	ti.Blur()
 
@@ -383,6 +388,7 @@ func (m *Model) toggleHelp() {
 
 func (m *Model) focusSearch(status string) {
 	m.searchFocused = true
+	m.searchBox.Placeholder = searchPlaceholderFocused
 	m.searchBox.Focus()
 	if status != "" {
 		m.status = status
@@ -391,6 +397,7 @@ func (m *Model) focusSearch(status string) {
 
 func (m *Model) blurSearch() {
 	m.searchFocused = false
+	m.searchBox.Placeholder = searchPlaceholderIdle
 	m.searchBox.Blur()
 }
 
@@ -568,7 +575,7 @@ func (m Model) viewBrowse() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 
 	return strings.Join([]string{
-		m.viewTopChrome("wgt", m.summaryText(), m.browseHelpBindings().short),
+		m.viewTopChrome("wgt", m.browseTitleText(), m.browseHelpBindings().short),
 		searchLabel,
 		m.searchBox.View(),
 		body,
@@ -591,13 +598,7 @@ func (m Model) listView(width int) string {
 	end := min(len(m.filtered), start+available)
 
 	for i := start; i < end; i++ {
-		t := m.filtered[i]
-		line := truncate(fmt.Sprintf("%s [%s] %s", t.Name, t.Kind, t.Group.Name), width)
-		if i == m.selected {
-			rows = append(rows, selectedStyle.Render("• "+line))
-		} else {
-			rows = append(rows, "  "+line)
-		}
+		rows = append(rows, renderTargetListLine(m.filtered[i], width, i == m.selected))
 	}
 
 	if start > 0 || end < len(m.filtered) {
@@ -638,25 +639,21 @@ func (m Model) detailView(width int) string {
 	return strings.Join(rows, "\n")
 }
 
-func (m Model) summaryText() string {
-	parts := []string{fmt.Sprintf("%d targets", len(m.filtered))}
-	if q := strings.TrimSpace(m.searchBox.Value()); q != "" {
-		parts = append(parts, fmt.Sprintf("query=%q", q))
-	}
-	if len(m.filtered) > 0 {
-		parts = append(parts, fmt.Sprintf("selected=%d", m.selected+1))
-	}
+func (m Model) browseTitleText() string {
 	if m.searchFocused {
-		parts = append(parts, "typing", "scroll with arrows")
+		return ""
 	}
-	return strings.Join(parts, " - ")
+	if strings.TrimSpace(m.searchBox.Value()) != "" {
+		return "Search results"
+	}
+	return "Browse targets"
 }
 
 func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) string {
 	header := lipgloss.JoinHorizontal(lipgloss.Center,
 		appBadgeStyle.Render(title),
 		" ",
-		m.viewModeTabs(),
+		modeActiveStyle.Render(m.currentPageLabel()),
 	)
 	rows := []string{header}
 	if strings.TrimSpace(summary) != "" {
@@ -668,44 +665,17 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 	return strings.Join(rows, "\n")
 }
 
-func (m Model) viewModeTabs() string {
-	active := m.currentModeLabel()
-	tabs := []struct {
-		id    string
-		label string
-	}{
-		{id: "browse", label: "browse"},
-		{id: "search", label: "search"},
-		{id: "tunnel-form", label: "tunnel form"},
-		{id: "rsync-form", label: "rsync form"},
-		{id: "tunnel", label: "tunnel"},
-		{id: "config", label: "config"},
-		{id: "onboarding", label: "onboarding"},
-	}
-	parts := make([]string, 0, len(tabs))
-	for _, tab := range tabs {
-		style := modeInactiveStyle
-		if tab.id == active {
-			style = modeActiveStyle
-		}
-		parts = append(parts, style.Render(tab.label))
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Center, parts...)
-}
-
-func (m Model) currentModeLabel() string {
-	if m.mode == modeBrowse && m.searchFocused {
+func (m Model) currentPageLabel() string {
+	if m.mode == modeBrowse && (m.searchFocused || strings.TrimSpace(m.searchBox.Value()) != "") {
 		return "search"
 	}
 	switch m.mode {
 	case modeBrowse:
 		return "browse"
-	case modeTunnelForm:
-		return "tunnel-form"
-	case modeRsyncForm:
-		return "rsync-form"
-	case modeTunnel:
+	case modeTunnelForm, modeTunnel:
 		return "tunnel"
+	case modeRsyncForm:
+		return "transfer"
 	case modeConfig:
 		return "config"
 	case modeOnboarding:
@@ -730,8 +700,28 @@ func renderShortcutBar(bindings []key.Binding, width int) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	line := strings.Join(parts, actionSepStyle.Render("  •  "))
-	return actionsBarStyle.Width(max(0, width-2)).Render(line)
+
+	availableWidth := max(1, width-2)
+	sep := actionSepStyle.Render("  •  ")
+	lines := make([]string, 0, 2)
+	current := ""
+	for _, part := range parts {
+		candidate := part
+		if current != "" {
+			candidate = current + sep + part
+		}
+		if current != "" && lipgloss.Width(candidate) > availableWidth {
+			lines = append(lines, current)
+			current = part
+			continue
+		}
+		current = candidate
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+
+	return actionsBarStyle.Width(availableWidth).Render(strings.Join(lines, "\n"))
 }
 
 func joinStatus(parts ...string) string {
@@ -760,18 +750,60 @@ func fallback(v, d string) string {
 	return v
 }
 
+func renderTargetListLine(t api.Target, width int, selected bool) string {
+	prefix := "  "
+	prefixRendered := prefix
+	main := fmt.Sprintf("%s [%s] %s", t.Name, t.Kind, t.Group.Name)
+	available := max(0, width-lipgloss.Width(prefix))
+	description := strings.TrimSpace(t.Description)
+
+	if description != "" {
+		mainWidth := lipgloss.Width(main)
+		switch {
+		case mainWidth >= available:
+			main = truncate(main, available)
+			description = ""
+		case mainWidth+1+lipgloss.Width(description) > available:
+			description = truncate(description, max(0, available-mainWidth-1))
+		}
+	} else {
+		main = truncate(main, available)
+	}
+
+	if selected {
+		prefixRendered = selectedStyle.Render("• ")
+		main = selectedStyle.Render(main)
+	}
+	if description != "" {
+		return prefixRendered + main + " " + mutedStyle.Render(description)
+	}
+	return prefixRendered + main
+}
+
 func truncate(s string, width int) string {
-	if width <= 0 || lipgloss.Width(s) <= width {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= width {
 		return s
 	}
-	if width <= 1 {
+	if width == 1 {
 		return "…"
 	}
+
+	limit := width - 1
 	runes := []rune(s)
-	if len(runes) >= width {
-		return string(runes[:width-1]) + "…"
+	out := make([]rune, 0, len(runes))
+	used := 0
+	for _, r := range runes {
+		rw := lipgloss.Width(string(r))
+		if used+rw > limit {
+			break
+		}
+		out = append(out, r)
+		used += rw
 	}
-	return s
+	return string(out) + "…"
 }
 
 func clamp(v, minV, maxV int) int {

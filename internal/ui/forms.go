@@ -23,7 +23,7 @@ func (m *Model) startForm(edit bool) {
 	m.formTitle = formTitle(edit)
 	m.fields = []formField{
 		newField("server.url", "Server URL", cfg.Server.URL, "Base URL, for example https://warpgate.example.com"),
-		newPasswordField("server.token", "API Token", cfg.Server.Token, "Generate this once from the Warpgate web UI"),
+		newPasswordField("server.token", "API Token", cfg.Server.Token, apiTokenHint(cfg.Server.URL)),
 		newField("ssh.username", "SSH Username", cfg.SSH.Username, "Warpgate username or email used for SSH"),
 		newField("ssh.host", "SSH Host", cfg.SSH.Host, "Optional override. Leave blank to derive from server URL"),
 		newField("ssh.port", "SSH Port", portString(cfg.SSH.Port), "Optional override. Usually auto-detected from /info"),
@@ -173,6 +173,7 @@ func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.fields[m.formIndex].input, cmd = m.fields[m.formIndex].input.Update(msg)
+	m.syncConfigHints()
 	return m, cmd
 }
 
@@ -376,6 +377,24 @@ func (m *Model) rememberTransferFlags(tool, flags string) {
 	}
 }
 
+func (m *Model) syncConfigHints() {
+	m.setFieldHint("server.token", apiTokenHint(m.rawFieldValue("server.url")))
+}
+
+func apiTokenHint(serverURL string) string {
+	const fallback = "Generate this once from the Warpgate web UI"
+	serverURL = strings.TrimSpace(serverURL)
+	if serverURL == "" {
+		return fallback
+	}
+	base, err := url.Parse(serverURL)
+	if err != nil || base.Scheme == "" || base.Host == "" {
+		return fallback
+	}
+	link := base.ResolveReference(&url.URL{Path: "/@warpgate/", Fragment: "/profile/api-tokens"})
+	return link.String()
+}
+
 func (m *Model) syncRsyncHints() {
 	direction := m.fieldValue("rsync.direction")
 	localHint := "Source path on this machine"
@@ -389,9 +408,13 @@ func (m *Model) syncRsyncHints() {
 }
 
 func (m *Model) fieldValue(key string) string {
+	return strings.ToLower(m.rawFieldValue(key))
+}
+
+func (m *Model) rawFieldValue(key string) string {
 	for _, field := range m.fields {
 		if field.key == key {
-			return strings.ToLower(strings.TrimSpace(field.input.Value()))
+			return strings.TrimSpace(field.input.Value())
 		}
 	}
 	return ""

@@ -1,6 +1,11 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	cfgpkg "github.com/oddship/wg-tui/internal/config"
+)
 
 func TestParseTransferFlagsSplitsWords(t *testing.T) {
 	got := parseTransferFlags("-avz --delete --exclude tmp")
@@ -244,5 +249,47 @@ func TestShiftFieldOptionUpdatesConditionalHintsForDownload(t *testing.T) {
 	}
 	if got := m.fields[4].hint; got != "Source path on the target" {
 		t.Fatalf("unexpected remote download hint: %q", got)
+	}
+}
+
+func TestAPITokenHintUsesServerURL(t *testing.T) {
+	got := apiTokenHint("https://warpgate.example.com/")
+	want := "https://warpgate.example.com/@warpgate/#/profile/api-tokens"
+	if got != want {
+		t.Fatalf("expected token hint %q, got %q", want, got)
+	}
+}
+
+func TestAPITokenHintFallsBackForInvalidServerURL(t *testing.T) {
+	got := apiTokenHint("not a url")
+	want := "Generate this once from the Warpgate web UI"
+	if got != want {
+		t.Fatalf("expected fallback token hint %q, got %q", want, got)
+	}
+}
+
+func TestStartFormUsesServerURLForTokenHint(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.cfg.Server.URL = "https://warpgate.example.com/"
+	m.startForm(true)
+
+	if got := m.fields[1].hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
+		t.Fatalf("expected token hint from server url, got %q", got)
+	}
+}
+
+func TestEditingServerURLUpdatesTokenHint(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.startForm(true)
+	m.fields[0].input.SetValue("")
+	m.focusField(0)
+
+	updatedAny, _ := m.updateConfigForm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("https://warpgate.example.com/")})
+	updated := updatedAny.(Model)
+
+	if got := updated.fields[1].hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
+		t.Fatalf("expected token hint to update from edited server url, got %q", got)
 	}
 }
