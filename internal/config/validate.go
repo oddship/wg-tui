@@ -6,6 +6,12 @@ import (
 )
 
 func validate(cfg Config) error {
+	if err := validateApprovalOpenMode(cfg.UI.ApprovalOpenMode); err != nil {
+		return err
+	}
+	if err := validateApprovalOpenCommand(cfg.UI.ApprovalOpenMode, cfg.UI.ApprovalOpenCommand); err != nil {
+		return err
+	}
 	type binding struct {
 		name string
 		keys []string
@@ -40,6 +46,29 @@ func validate(cfg Config) error {
 		}
 	}
 
+	return nil
+}
+
+func validateApprovalOpenMode(mode string) error {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case ApprovalOpenModeAsk, ApprovalOpenModeAlways, ApprovalOpenModeNever:
+		return nil
+	default:
+		return fmt.Errorf("invalid approval_open_mode: %q", mode)
+	}
+}
+
+func validateApprovalOpenCommand(mode, command string) error {
+	if strings.EqualFold(strings.TrimSpace(mode), ApprovalOpenModeNever) {
+		return nil
+	}
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return fmt.Errorf("approval_open_command is required unless approval_open_mode is never")
+	}
+	if strings.Count(command, "%s") != 1 {
+		return fmt.Errorf("approval_open_command must contain exactly one %%s placeholder")
+	}
 	return nil
 }
 

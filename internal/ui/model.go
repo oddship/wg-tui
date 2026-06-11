@@ -231,10 +231,13 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSSHFinished(msg sshpkg.ExecFinishedMsg) (tea.Model, tea.Cmd) {
+	if msg.ConfigUpdated {
+		m.applyConfig(msg.Config)
+	}
 	if msg.Err != nil {
 		m.status = msg.Err.Error()
 	} else {
-		m.status = "ssh session ended"
+		m.status = firstNonEmpty(msg.Status, "ssh session ended")
 	}
 	return m, nil
 }
@@ -433,7 +436,7 @@ func (m Model) connectSelected() (tea.Model, tea.Cmd) {
 	if len(m.filtered) == 0 {
 		return m, nil
 	}
-	return m, sshpkg.ExecCmd(m.cfg, m.filtered[m.selected].Name)
+	return m, sshpkg.ExecCmd(m.cfgPath, m.cfg, m.filtered[m.selected].Name)
 }
 
 func (m *Model) copySelectedCommand() {

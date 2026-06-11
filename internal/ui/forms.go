@@ -27,6 +27,8 @@ func (m *Model) startForm(edit bool) {
 		newField("ssh.username", "SSH Username", cfg.SSH.Username, "Warpgate username or email used for SSH"),
 		newField("ssh.host", "SSH Host", cfg.SSH.Host, "Optional override. Leave blank to derive from server URL"),
 		newField("ssh.port", "SSH Port", portString(cfg.SSH.Port), "Optional override. Usually auto-detected from /info"),
+		newSelectField("ui.approval_open_mode", "Open Approval Link", []string{cfgpkg.ApprovalOpenModeAsk, cfgpkg.ApprovalOpenModeAlways, cfgpkg.ApprovalOpenModeNever}, cfg.UI.ApprovalOpenMode, "ask prompts each time - always opens automatically - never stays manual"),
+		newField("ui.approval_open_command", "Browser Open Command", cfg.UI.ApprovalOpenCommand, "Use %s for the approval URL, for example xdg-open %s or firefox %s"),
 	}
 	m.formIndex = 0
 	m.formStatus = ""
@@ -147,6 +149,7 @@ func newTextInput(value string) textinput.Model {
 }
 
 func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	current := m.currentField()
 	switch msg.String() {
 	case "esc":
 		if m.mode == modeConfig {
@@ -161,7 +164,21 @@ func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "up":
 		m.focusField((m.formIndex - 1 + len(m.fields)) % len(m.fields))
 		return m, nil
+	case "left", "h":
+		if current.isSelect() {
+			m.shiftFieldOption(m.formIndex, -1)
+			return m, nil
+		}
+	case "right", "l":
+		if current.isSelect() {
+			m.shiftFieldOption(m.formIndex, 1)
+			return m, nil
+		}
 	case "enter":
+		if current.isSelect() {
+			m.focusField((m.formIndex + 1) % len(m.fields))
+			return m, nil
+		}
 		cfg, err := m.formConfig()
 		if err != nil {
 			m.formStatus = err.Error()
@@ -477,6 +494,10 @@ func (m Model) formConfig() (cfgpkg.Config, error) {
 				return cfg, err
 			}
 			cfg.SSH.Port = port
+		case "ui.approval_open_mode":
+			cfg.UI.ApprovalOpenMode = strings.ToLower(value)
+		case "ui.approval_open_command":
+			cfg.UI.ApprovalOpenCommand = value
 		}
 	}
 
@@ -646,10 +667,10 @@ func rsyncCmd(cfg cfgpkg.Config, target, tool, direction string, flags []string,
 func (m Model) viewForm() string {
 	helpText := "tab/shift+tab to move - enter to submit"
 	if m.mode == modeConfig {
-		helpText = "tab/shift+tab to move - enter to validate and save - esc to cancel config edit"
+		helpText = "tab/shift+tab to move - left/right to choose options - enter to continue or validate and save - esc to cancel config edit"
 	}
 	if m.mode == modeOnboarding {
-		helpText = "tab/shift+tab to move - enter to validate and save"
+		helpText = "tab/shift+tab to move - left/right to choose options - enter to continue or validate and save"
 	}
 	if m.mode == modeTunnelForm {
 		helpText = "tab/shift+tab to move - enter to start tunnel - esc to cancel"

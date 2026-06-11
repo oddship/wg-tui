@@ -35,6 +35,36 @@ func TestValidateRejectsEmptyBinding(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInvalidApprovalOpenMode(t *testing.T) {
+	cfg := Default()
+	cfg.UI.ApprovalOpenMode = "sometimes"
+
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected invalid approval open mode to fail validation")
+	}
+}
+
+func TestValidateRejectsApprovalOpenCommandWithoutPlaceholder(t *testing.T) {
+	cfg := Default()
+	cfg.UI.ApprovalOpenCommand = "xdg-open"
+
+	err := validate(cfg)
+	if err == nil {
+		t.Fatal("expected approval open command without placeholder to fail validation")
+	}
+}
+
+func TestValidateAllowsEmptyApprovalOpenCommandWhenModeIsNever(t *testing.T) {
+	cfg := Default()
+	cfg.UI.ApprovalOpenMode = ApprovalOpenModeNever
+	cfg.UI.ApprovalOpenCommand = ""
+
+	if err := validate(cfg); err != nil {
+		t.Fatalf("expected never mode to allow empty approval command: %v", err)
+	}
+}
+
 func TestValidateRejectsTunnelBindingConflict(t *testing.T) {
 	cfg := Default()
 	cfg.Keys.Tunnel = []string{"enter"}

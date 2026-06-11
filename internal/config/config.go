@@ -35,9 +35,19 @@ type CacheConfig struct {
 	UseStaleOnError bool          `koanf:"use_stale_on_error"`
 }
 
+const (
+	ApprovalOpenModeAsk    = "ask"
+	ApprovalOpenModeAlways = "always"
+	ApprovalOpenModeNever  = "never"
+
+	DefaultApprovalOpenCommand = "xdg-open %s"
+)
+
 type UIConfig struct {
-	DetailsPane  string `koanf:"details_pane"`
-	PreviewLines int    `koanf:"preview_lines"`
+	DetailsPane         string `koanf:"details_pane"`
+	PreviewLines        int    `koanf:"preview_lines"`
+	ApprovalOpenMode    string `koanf:"approval_open_mode"`
+	ApprovalOpenCommand string `koanf:"approval_open_command"`
 }
 
 type KeysConfig struct {
@@ -70,8 +80,10 @@ func Default() Config {
 			UseStaleOnError: true,
 		},
 		UI: UIConfig{
-			DetailsPane:  "right",
-			PreviewLines: 8,
+			DetailsPane:         "right",
+			PreviewLines:        8,
+			ApprovalOpenMode:    ApprovalOpenModeAsk,
+			ApprovalOpenCommand: DefaultApprovalOpenCommand,
 		},
 		Keys: KeysConfig{
 			Up:         []string{"up", "k"},

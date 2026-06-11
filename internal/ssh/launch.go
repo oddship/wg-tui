@@ -83,15 +83,19 @@ func ScpCommand(cfg cfgpkg.Config, target, direction string, flags []string, loc
 	return "scp", args, nil
 }
 
-func ExecCmd(cfg cfgpkg.Config, target string) tea.Cmd {
-	bin, args := ShellCommand(cfg, target)
-	cmd := exec.Command(bin, args...)
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		return ExecFinishedMsg{Err: err}
+func ExecCmd(cfgPath string, cfg cfgpkg.Config, target string) tea.Cmd {
+	cmd := newConnectExecCommand(cfgPath, cfg, target)
+	return tea.Exec(cmd, func(err error) tea.Msg {
+		return ExecFinishedMsg{Err: err, ConfigUpdated: cmd.configUpdated, Config: cmd.cfg, Status: cmd.status}
 	})
 }
 
-type ExecFinishedMsg struct{ Err error }
+type ExecFinishedMsg struct {
+	Err           error
+	ConfigUpdated bool
+	Config        cfgpkg.Config
+	Status        string
+}
 
 type TunnelProcess struct {
 	cfg         cfgpkg.Config

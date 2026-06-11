@@ -68,8 +68,10 @@ func (cfg Config) toMap() map[string]any {
 			"use_stale_on_error": cfg.Cache.UseStaleOnError,
 		},
 		"ui": map[string]any{
-			"details_pane":  cfg.UI.DetailsPane,
-			"preview_lines": cfg.UI.PreviewLines,
+			"details_pane":          cfg.UI.DetailsPane,
+			"preview_lines":         cfg.UI.PreviewLines,
+			"approval_open_mode":    cfg.UI.ApprovalOpenMode,
+			"approval_open_command": cfg.UI.ApprovalOpenCommand,
 		},
 		"keys": cfg.Keys.toMap(),
 	}
@@ -114,6 +116,12 @@ func applyDerived(cfg *Config) {
 	}
 	if cfg.UI.PreviewLines == 0 {
 		cfg.UI.PreviewLines = def.UI.PreviewLines
+	}
+	if cfg.UI.ApprovalOpenMode == "" {
+		cfg.UI.ApprovalOpenMode = def.UI.ApprovalOpenMode
+	}
+	if cfg.UI.ApprovalOpenCommand == "" {
+		cfg.UI.ApprovalOpenCommand = def.UI.ApprovalOpenCommand
 	}
 	mergeKeys(&cfg.Keys, def.Keys)
 }

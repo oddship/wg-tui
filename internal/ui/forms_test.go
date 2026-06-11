@@ -293,3 +293,76 @@ func TestEditingServerURLUpdatesTokenHint(t *testing.T) {
 		t.Fatalf("expected token hint to update from edited server url, got %q", got)
 	}
 }
+
+func TestStartFormIncludesApprovalOpenSettings(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.startForm(true)
+
+	modeField := requireField(t, m.fields, "ui.approval_open_mode")
+	if got := modeField.input.Value(); got != cfgpkg.ApprovalOpenModeAsk {
+		t.Fatalf("expected default approval open mode %q, got %q", cfgpkg.ApprovalOpenModeAsk, got)
+	}
+	commandField := requireField(t, m.fields, "ui.approval_open_command")
+	if got := commandField.input.Value(); got != cfgpkg.DefaultApprovalOpenCommand {
+		t.Fatalf("expected default approval open command %q, got %q", cfgpkg.DefaultApprovalOpenCommand, got)
+	}
+}
+
+func TestFormConfigCapturesApprovalOpenSettings(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.cfg.Server.URL = "https://warpgate.example.com"
+	m.cfg.Server.Token = "token"
+	m.cfg.SSH.Username = "user@example.com"
+	m.startForm(true)
+	requireField(t, m.fields, "ui.approval_open_mode").input.SetValue(cfgpkg.ApprovalOpenModeAlways)
+	requireField(t, m.fields, "ui.approval_open_command").input.SetValue("firefox %s")
+
+	cfg, err := m.formConfig()
+	if err != nil {
+		t.Fatalf("formConfig: %v", err)
+	}
+	if got := cfg.UI.ApprovalOpenMode; got != cfgpkg.ApprovalOpenModeAlways {
+		t.Fatalf("expected approval open mode %q, got %q", cfgpkg.ApprovalOpenModeAlways, got)
+	}
+	if got := cfg.UI.ApprovalOpenCommand; got != "firefox %s" {
+		t.Fatalf("expected approval open command %q, got %q", "firefox %s", got)
+	}
+}
+
+func TestUpdateConfigFormCyclesApprovalOpenMode(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.startForm(true)
+	m.focusField(requireFieldIndex(t, m.fields, "ui.approval_open_mode"))
+
+	updatedAny, _ := m.updateConfigForm(tea.KeyMsg{Type: tea.KeyRight})
+	updated := updatedAny.(Model)
+
+	if got := requireField(t, updated.fields, "ui.approval_open_mode").input.Value(); got != cfgpkg.ApprovalOpenModeAlways {
+		t.Fatalf("expected approval open mode to cycle to %q, got %q", cfgpkg.ApprovalOpenModeAlways, got)
+	}
+}
+
+func requireField(t *testing.T, fields []formField, key string) *formField {
+	t.Helper()
+	for i := range fields {
+		if fields[i].key == key {
+			return &fields[i]
+		}
+	}
+	t.Fatalf("missing form field %q", key)
+	return nil
+}
+
+func requireFieldIndex(t *testing.T, fields []formField, key string) int {
+	t.Helper()
+	for i := range fields {
+		if fields[i].key == key {
+			return i
+		}
+	}
+	t.Fatalf("missing form field %q", key)
+	return -1
+}
