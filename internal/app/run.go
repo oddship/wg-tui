@@ -1,13 +1,27 @@
 package app
 
 import (
+	"io"
+
 	tea "github.com/charmbracelet/bubbletea"
-	cfgpkg "github.com/oddship/wg-tui/internal/config"
 	"github.com/oddship/wg-tui/internal/ui"
 )
 
-func Run() error {
-	p := tea.NewProgram(ui.New(cfgpkg.ConfigPath()), tea.WithAltScreen())
-	_, err := p.Run()
+func Run(args []string, stdout io.Writer) error {
+	if stdout == nil {
+		stdout = io.Discard
+	}
+
+	opts, err := ParseOptions(args)
+	if err != nil {
+		return err
+	}
+	if opts.ShowHelp {
+		_, err := io.WriteString(stdout, Usage())
+		return err
+	}
+
+	p := tea.NewProgram(ui.New(opts.ConfigPath, ui.WithCacheDirOverride(opts.CachePath)), tea.WithAltScreen())
+	_, err = p.Run()
 	return err
 }

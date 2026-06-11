@@ -127,8 +127,13 @@ func (m Model) startTunnel(target string, remotePort, localPort int) (tea.Model,
 	m.tunnel.state = tunnelOpening
 	m.tunnel.lastError = ""
 	m.status = fmt.Sprintf("complete SSH approval to open tunnel for %s", target)
+	m.recordTargetUse(target)
 
-	proc, err := sshpkg.PrepareTunnel(m.cfg, target, remotePort, localPort)
+	cfg := m.cfg
+	if cacheDir := m.cacheDir(); cacheDir != "" {
+		cfg.Cache.Dir = cacheDir
+	}
+	proc, err := sshpkg.PrepareTunnel(cfg, target, remotePort, localPort)
 	if err != nil {
 		m.tunnel.state = tunnelFailed
 		m.tunnel.lastError = err.Error()

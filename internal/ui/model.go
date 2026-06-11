@@ -32,11 +32,12 @@ const (
 )
 
 type Model struct {
-	cfgPath string
-	cfg     cfgpkg.Config
-	keys    cfgpkg.KeyMap
-	client  *api.Client
-	tunnel  tunnelSession
+	cfgPath          string
+	cacheDirOverride string
+	cfg              cfgpkg.Config
+	keys             cfgpkg.KeyMap
+	client           *api.Client
+	tunnel           tunnelSession
 
 	searchBox     textinput.Model
 	searchFocused bool
@@ -63,6 +64,7 @@ type Model struct {
 	rsyncLastScpFlags    string
 	rsyncLastLocalPath   string
 	rsyncLastRemotePath  string
+	recentTargets        []string
 	tunnelLastRemotePort int
 	tunnelLastLocalPort  int
 	tunnelLocalTouched   bool
@@ -107,9 +109,19 @@ type configSavedMsg struct {
 const (
 	searchPlaceholderIdle    = "Type / to search targets"
 	searchPlaceholderFocused = "Type to search - esc to exit"
+	recentTargetLimit        = 10
+	recentTargetMarker       = "↺"
 )
 
-func New(cfgPath string) Model {
+type Option func(*Model)
+
+func WithCacheDirOverride(dir string) Option {
+	return func(m *Model) {
+		m.cacheDirOverride = strings.TrimSpace(dir)
+	}
+}
+
+func New(cfgPath string, opts ...Option) Model {
 	ti := textinput.New()
 	ti.Placeholder = searchPlaceholderIdle
 	ti.Prompt = "search> "
@@ -121,12 +133,17 @@ func New(cfgPath string) Model {
 		help:      help.New(),
 		status:    "loading...",
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&m)
+		}
+	}
 	m.help.ShowAll = false
 	m.initTunnelBindings()
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return loadCmd(m.cfgPath) }
+func (m Model) Init() tea.Cmd { return loadCmd(m.cfgPath, m.cacheDirOverride) }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -325,6 +342,17 @@ func (m *Model) applyConfig(cfg cfgpkg.Config) {
 	m.client = api.New(cfg)
 }
 
+func (m Model) cacheDir() string {
+	return resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride)
+}
+
+func resolveCacheDir(configDir, override string) string {
+	if strings.TrimSpace(override) != "" {
+		return strings.TrimSpace(override)
+	}
+	return strings.TrimSpace(configDir)
+}
+
 func (m *Model) applyState(state cache.State) {
 	m.rsyncLastTool = state.Transfer.Tool
 	m.rsyncLastDirection = state.Transfer.Direction
@@ -332,6 +360,7 @@ func (m *Model) applyState(state cache.State) {
 	m.rsyncLastScpFlags = state.Transfer.ScpFlags
 	m.rsyncLastLocalPath = state.Transfer.LocalPath
 	m.rsyncLastRemotePath = state.Transfer.RemotePath
+	m.recentTargets = append([]string(nil), state.RecentTargets...)
 }
 
 func (m Model) stateSnapshot() cache.State {
@@ -344,19 +373,63 @@ func (m Model) stateSnapshot() cache.State {
 			LocalPath:  m.rsyncLastLocalPath,
 			RemotePath: m.rsyncLastRemotePath,
 		},
+		RecentTargets: append([]string(nil), m.recentTargets...),
+	}
+}
+
+func (m *Model) recordTargetUse(name string) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+
+	m.recentTargets = updatedRecentTargets(m.recentTargets, name, recentTargetLimit)
+	m.rebuildTargetIndex()
+	m.selectTargetByName(name)
+	m.persistState()
+}
+
+func updatedRecentTargets(current []string, name string, limit int) []string {
+	updated := []string{name}
+	for _, existing := range current {
+		existing = strings.TrimSpace(existing)
+		if existing == "" || existing == name {
+			continue
+		}
+		updated = append(updated, existing)
+		if len(updated) == limit {
+			break
+		}
+	}
+	return updated
+}
+
+func (m *Model) rebuildTargetIndex() {
+	m.index = search.New(m.targets, m.recentTargets...)
+	m.applyFilter()
+}
+
+func (m *Model) selectTargetByName(name string) {
+	for i, target := range m.filtered {
+		if target.Name == name {
+			m.selected = i
+			return
+		}
 	}
 }
 
 func (m *Model) persistState() {
-	if strings.TrimSpace(m.cfg.Cache.Dir) == "" {
+	if strings.TrimSpace(m.cacheDir()) == "" {
 		return
 	}
-	_ = cache.SaveState(m.cfg.Cache.Dir, m.stateSnapshot())
+	_ = cache.SaveState(m.cacheDir(), m.stateSnapshot())
 }
 
 func (m *Model) applySnapshot(snap cache.Snapshot) {
 	m.snapshot = snap
-	_ = cache.Save(m.cfg.Cache.Dir, snap)
+	if cacheDir := m.cacheDir(); cacheDir != "" {
+		_ = cache.Save(cacheDir, snap)
+	}
 	if snap.Info.Ports.SSH != 0 && (m.cfg.SSH.Port == 0 || m.cfg.SSH.Port == 2222) {
 		m.cfg.SSH.Port = snap.Info.Ports.SSH
 	}
@@ -365,8 +438,7 @@ func (m *Model) applySnapshot(snap cache.Snapshot) {
 
 func (m *Model) setTargets(targets []api.Target) {
 	m.targets = targets
-	m.index = search.New(targets)
-	m.applyFilter()
+	m.rebuildTargetIndex()
 }
 
 func (m *Model) applyFilter() {
@@ -436,7 +508,9 @@ func (m Model) connectSelected() (tea.Model, tea.Cmd) {
 	if len(m.filtered) == 0 {
 		return m, nil
 	}
-	return m, sshpkg.ExecCmd(m.cfgPath, m.cfg, m.filtered[m.selected].Name)
+	target := m.filtered[m.selected].Name
+	m.recordTargetUse(target)
+	return m, sshpkg.ExecCmd(m.cfgPath, m.cfg, target)
 }
 
 func (m *Model) copySelectedCommand() {
@@ -451,7 +525,7 @@ func (m *Model) copySelectedCommand() {
 	m.status = "ssh command copied"
 }
 
-func loadCmd(cfgPath string) tea.Cmd {
+func loadCmd(cfgPath, cacheDirOverride string) tea.Cmd {
 	return func() tea.Msg {
 		if _, err := os.Stat(cfgPath); err != nil {
 			if os.IsNotExist(err) {
@@ -465,8 +539,9 @@ func loadCmd(cfgPath string) tea.Cmd {
 			return loadedMsg{err: err, status: "failed to load config - fix values below"}
 		}
 
-		snap, err := cache.Load(cfg.Cache.Dir)
-		state, stateErr := cache.LoadState(cfg.Cache.Dir)
+		cacheDir := resolveCacheDir(cfg.Cache.Dir, cacheDirOverride)
+		snap, err := cache.Load(cacheDir)
+		state, stateErr := cache.LoadState(cacheDir)
 		status := "loaded config"
 		switch {
 		case err == nil:
@@ -601,7 +676,7 @@ func (m Model) listView(width int) string {
 	end := min(len(m.filtered), start+available)
 
 	for i := start; i < end; i++ {
-		rows = append(rows, renderTargetListLine(m.filtered[i], width, i == m.selected))
+		rows = append(rows, renderTargetListLineWithRecent(m.filtered[i], width, i == m.selected, m.isRecentTarget(m.filtered[i].Name)))
 	}
 
 	if start > 0 || end < len(m.filtered) {
@@ -753,21 +828,42 @@ func fallback(v, d string) string {
 	return v
 }
 
+func (m Model) isRecentTarget(name string) bool {
+	name = strings.TrimSpace(name)
+	for _, recent := range m.recentTargets {
+		if recent == name {
+			return true
+		}
+	}
+	return false
+}
+
 func renderTargetListLine(t api.Target, width int, selected bool) string {
+	return renderTargetListLineWithRecent(t, width, selected, false)
+}
+
+func renderTargetListLineWithRecent(t api.Target, width int, selected, recent bool) string {
 	prefix := "  "
 	prefixRendered := prefix
 	main := fmt.Sprintf("%s [%s] %s", t.Name, t.Kind, t.Group.Name)
 	available := max(0, width-lipgloss.Width(prefix))
-	description := strings.TrimSpace(t.Description)
+	secondaryParts := make([]string, 0, 2)
+	if recent {
+		secondaryParts = append(secondaryParts, recentTargetMarker)
+	}
+	if description := strings.TrimSpace(t.Description); description != "" {
+		secondaryParts = append(secondaryParts, description)
+	}
+	secondary := strings.Join(secondaryParts, " ")
 
-	if description != "" {
+	if secondary != "" {
 		mainWidth := lipgloss.Width(main)
 		switch {
 		case mainWidth >= available:
 			main = truncate(main, available)
-			description = ""
-		case mainWidth+1+lipgloss.Width(description) > available:
-			description = truncate(description, max(0, available-mainWidth-1))
+			secondary = ""
+		case mainWidth+1+lipgloss.Width(secondary) > available:
+			secondary = truncate(secondary, max(0, available-mainWidth-1))
 		}
 	} else {
 		main = truncate(main, available)
@@ -777,8 +873,8 @@ func renderTargetListLine(t api.Target, width int, selected bool) string {
 		prefixRendered = selectedStyle.Render("• ")
 		main = selectedStyle.Render(main)
 	}
-	if description != "" {
-		return prefixRendered + main + " " + mutedStyle.Render(description)
+	if secondary != "" {
+		return prefixRendered + main + " " + mutedStyle.Render(secondary)
 	}
 	return prefixRendered + main
 }

@@ -56,3 +56,49 @@ func TestFilterTreatsSpaceAndHyphenQueriesTheSame(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterEmptyQueryReturnsRecentTargetsFirst(t *testing.T) {
+	idx := New([]api.Target{
+		makeTarget("one", "alpha", ""),
+		makeTarget("two", "alpha", ""),
+		makeTarget("three", "alpha", ""),
+	}, "three", "one")
+
+	got := idx.Filter("")
+	if len(got) != 3 {
+		t.Fatalf("expected 3 targets, got %d", len(got))
+	}
+	if got[0].Name != "three" || got[1].Name != "one" || got[2].Name != "two" {
+		t.Fatalf("expected recents first ordering, got %#v", []string{got[0].Name, got[1].Name, got[2].Name})
+	}
+}
+
+func TestFilterPrefersRecentTargetAmongSimilarMatches(t *testing.T) {
+	idx := New([]api.Target{
+		makeTarget("prod-api-b", "alpha", "secondary"),
+		makeTarget("prod-api-a", "alpha", "primary"),
+	}, "prod-api-a")
+
+	got := idx.Filter("prod api")
+	if len(got) == 0 {
+		t.Fatal("expected at least one match")
+	}
+	if got[0].Name != "prod-api-a" {
+		t.Fatalf("expected recent target to rank first, got %q", got[0].Name)
+	}
+}
+
+func TestFilterExactMatchBeatsWeakerRecentMatch(t *testing.T) {
+	idx := New([]api.Target{
+		makeTarget("prod-api-helper", "alpha", "helper"),
+		makeTarget("prod-api", "alpha", "exact"),
+	}, "prod-api-helper")
+
+	got := idx.Filter("prod api")
+	if len(got) == 0 {
+		t.Fatal("expected at least one match")
+	}
+	if got[0].Name != "prod-api" {
+		t.Fatalf("expected exact match to outrank weaker recent match, got %q", got[0].Name)
+	}
+}

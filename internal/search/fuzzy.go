@@ -21,6 +21,8 @@ const (
 	scoreSecondaryContains   = 6500
 	scorePrimaryFuzzy        = 5000
 	scoreSecondaryFuzzy      = 3000
+	recentBonusBase          = 260
+	recentBonusStep          = 10
 )
 
 type IndexedTarget struct {
@@ -29,6 +31,8 @@ type IndexedTarget struct {
 	Description string
 	Primary     string
 	Secondary   string
+	Order       int
+	RecentRank  int
 }
 
 type Index struct {
@@ -40,15 +44,18 @@ type scoredTarget struct {
 	score  int
 }
 
-func New(targets []api.Target) Index {
+func New(targets []api.Target, recentNames ...string) Index {
+	recentRanks := makeRecentRanks(recentNames)
 	items := make([]IndexedTarget, 0, len(targets))
-	for _, t := range targets {
+	for i, t := range targets {
 		items = append(items, IndexedTarget{
 			Target:      t,
 			Name:        normalize(t.Name),
 			Description: normalize(t.Description),
 			Primary:     normalize(strings.Join([]string{t.Name, t.Group.Name, t.Kind}, " ")),
 			Secondary:   normalize(strings.Join([]string{t.Description, t.ExternalHost, t.DefaultDatabaseName}, " ")),
+			Order:       i,
+			RecentRank:  recentRanks[t.Name],
 		})
 	}
 	return Index{Items: items}
@@ -74,8 +81,24 @@ func (idx Index) Filter(q string) []api.Target {
 }
 
 func (idx Index) allTargets() []api.Target {
-	out := make([]api.Target, 0, len(idx.Items))
-	for _, item := range idx.Items {
+	items := append([]IndexedTarget(nil), idx.Items...)
+	sort.SliceStable(items, func(i, j int) bool {
+		left := items[i]
+		right := items[j]
+		switch {
+		case left.RecentRank > 0 && right.RecentRank == 0:
+			return true
+		case left.RecentRank == 0 && right.RecentRank > 0:
+			return false
+		case left.RecentRank > 0 && right.RecentRank > 0:
+			return left.RecentRank < right.RecentRank
+		default:
+			return left.Order < right.Order
+		}
+	})
+
+	out := make([]api.Target, 0, len(items))
+	for _, item := range items {
 		out = append(out, item.Target)
 	}
 	return out
@@ -83,22 +106,22 @@ func (idx Index) allTargets() []api.Target {
 
 func scoreTarget(item IndexedTarget, q string) int {
 	if score := phraseScore(q, item.Name, scoreExactName, scorePrefixName, scoreContainsName); score != scoreNoMatch {
-		return score
+		return score + recentBonus(item.RecentRank)
 	}
 	if score := phraseScore(q, item.Description, scoreExactDescription, scorePrefixDescription, scoreContainsDescription); score != scoreNoMatch {
-		return score
+		return score + recentBonus(item.RecentRank)
 	}
 	if score := containsScore(q, item.Primary, scorePrimaryContains); score != scoreNoMatch {
-		return score
+		return score + recentBonus(item.RecentRank)
 	}
 	if score := containsScore(q, item.Secondary, scoreSecondaryContains); score != scoreNoMatch {
-		return score
+		return score + recentBonus(item.RecentRank)
 	}
 	if score, ok := fuzzyScore(q, item.Primary); ok {
-		return scorePrimaryFuzzy + score
+		return scorePrimaryFuzzy + score + recentBonus(item.RecentRank)
 	}
 	if score, ok := fuzzyScore(q, item.Secondary); ok {
-		return scoreSecondaryFuzzy + score
+		return scoreSecondaryFuzzy + score + recentBonus(item.RecentRank)
 	}
 	return scoreNoMatch
 }
@@ -158,6 +181,28 @@ func normalize(s string) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func recentBonus(rank int) int {
+	if rank <= 0 {
+		return 0
+	}
+	return recentBonusBase - rank*recentBonusStep
+}
+
+func makeRecentRanks(names []string) map[string]int {
+	ranks := make(map[string]int, len(names))
+	for i, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, exists := ranks[name]; exists {
+			continue
+		}
+		ranks[name] = i + 1
+	}
+	return ranks
 }
 
 func unwrapTargets(matches []scoredTarget) []api.Target {

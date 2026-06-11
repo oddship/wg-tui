@@ -2,6 +2,7 @@ package cache
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -16,6 +17,7 @@ func TestSaveAndLoadState(t *testing.T) {
 			LocalPath:  "./dist",
 			RemotePath: "/srv/app",
 		},
+		RecentTargets: []string{"prod-api", "prod-db"},
 	}
 
 	if err := SaveState(dir, want); err != nil {
@@ -27,7 +29,7 @@ func TestSaveAndLoadState(t *testing.T) {
 		t.Fatalf("LoadState: %v", err)
 	}
 
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected state:\nwant: %#v\n got: %#v", want, got)
 	}
 }

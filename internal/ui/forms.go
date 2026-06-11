@@ -270,7 +270,7 @@ func (m Model) updateRsyncForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.rememberTransferFlags(tool, strings.Join(flags, " "))
 		m.rsyncLastLocalPath = localPath
 		m.rsyncLastRemotePath = remotePath
-		m.persistState()
+		m.recordTargetUse(m.pendingRsyncTarget)
 		m.mode = modeBrowse
 		m.formStatus = ""
 		m.status = fmt.Sprintf("running %s %s for %s", tool, direction, m.pendingRsyncTarget)

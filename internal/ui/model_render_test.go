@@ -123,11 +123,7 @@ func TestBrowseViewShowsConfigShortcutEvenWhenShortcutsWrap(t *testing.T) {
 }
 
 func TestRenderTargetListLineShowsDescriptionAsSecondaryText(t *testing.T) {
-	var target api.Target
-	target.Name = "host-01"
-	target.Kind = "Ssh"
-	target.Group.Name = "alpha"
-	target.Description = "zone-a1"
+	target := makeRenderTarget("host-01", "alpha", "zone-a1")
 
 	line := ansiPattern.ReplaceAllString(renderTargetListLine(target, 80, false), "")
 	if !strings.Contains(line, "host-01 [Ssh] alpha zone-a1") {
@@ -136,17 +132,47 @@ func TestRenderTargetListLineShowsDescriptionAsSecondaryText(t *testing.T) {
 }
 
 func TestRenderTargetListLineTrimsDescriptionToAvailableWidth(t *testing.T) {
-	var target api.Target
-	target.Name = "host-01"
-	target.Kind = "Ssh"
-	target.Group.Name = "alpha"
-	target.Description = "zone-a1-extra-long"
+	target := makeRenderTarget("host-01", "alpha", "zone-a1-extra-long")
 
 	width := 28
 	line := ansiPattern.ReplaceAllString(renderTargetListLine(target, width, false), "")
 	if len([]rune(line)) > width {
 		t.Fatalf("expected rendered list row to fit width %d, got %q", width, line)
 	}
+}
+
+func TestRenderTargetListLineShowsRecentIndicator(t *testing.T) {
+	target := makeRenderTarget("host-01", "alpha", "")
+
+	line := ansiPattern.ReplaceAllString(renderTargetListLineWithRecent(target, 80, false, true), "")
+	if !strings.Contains(line, recentTargetMarker) {
+		t.Fatalf("expected recent indicator in list row, got %q", line)
+	}
+}
+
+func TestBrowseListShowsRecentIndicatorForRecentTarget(t *testing.T) {
+	m := New("test")
+	m.mode = modeBrowse
+	m.recentTargets = []string{"prod-api"}
+	m.setTargets([]api.Target{
+		makeRenderTarget("prod-api", "alpha", ""),
+		makeRenderTarget("prod-db", "alpha", ""),
+	})
+	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 20})
+
+	view := ansiPattern.ReplaceAllString(m.View(), "")
+	if !strings.Contains(view, "prod-api [Ssh] alpha "+recentTargetMarker) {
+		t.Fatalf("expected recent indicator in browse list, got %q", view)
+	}
+}
+
+func makeRenderTarget(name, group, description string) api.Target {
+	var target api.Target
+	target.Name = name
+	target.Kind = "Ssh"
+	target.Group.Name = group
+	target.Description = description
+	return target
 }
 
 func visibleLinePrefix(view string, width int) string {

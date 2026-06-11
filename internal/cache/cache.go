@@ -17,7 +17,8 @@ type Snapshot struct {
 }
 
 type State struct {
-	Transfer TransferState `json:"transfer"`
+	Transfer      TransferState `json:"transfer"`
+	RecentTargets []string      `json:"recent_targets,omitempty"`
 }
 
 type TransferState struct {

@@ -3,7 +3,19 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+)
+
+const (
+	appDirName            = "wgt"
+	defaultConfigFileName = "config.huml"
+)
+
+var (
+	userCacheDirFn  = os.UserCacheDir
+	userConfigDirFn = os.UserConfigDir
+	userHomeDirFn   = os.UserHomeDir
 )
 
 type Config struct {
@@ -66,7 +78,6 @@ type KeysConfig struct {
 }
 
 func Default() Config {
-	home, _ := os.UserHomeDir()
 	return Config{
 		Server: ServerConfig{},
 		SSH: SSHConfig{
@@ -74,7 +85,7 @@ func Default() Config {
 			Binary: "ssh",
 		},
 		Cache: CacheConfig{
-			Dir:             filepath.Join(home, ".cache", "wgt"),
+			Dir:             DefaultCacheDir(),
 			TTL:             10 * time.Minute,
 			MaxAge:          7 * 24 * time.Hour,
 			UseStaleOnError: true,
@@ -102,7 +113,18 @@ func Default() Config {
 	}
 }
 
+func DefaultCacheDir() string {
+	return appPath(userCacheDirFn, ".cache")
+}
+
 func ConfigPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "wgt", "config.huml")
+	return appPath(userConfigDirFn, ".config", defaultConfigFileName)
+}
+
+func appPath(userDirFn func() (string, error), fallbackRoot string, parts ...string) string {
+	if dir, err := userDirFn(); err == nil && strings.TrimSpace(dir) != "" {
+		return filepath.Join(append([]string{dir, appDirName}, parts...)...)
+	}
+	home, _ := userHomeDirFn()
+	return filepath.Join(append([]string{home, fallbackRoot, appDirName}, parts...)...)
 }
