@@ -1,0 +1,59 @@
+[
+  {
+    "name": "prod-api-01",
+    "description": "Primary application API in the alpha production group",
+    "kind": "Ssh",
+    "external_host": "api01.prod.example.internal",
+    "group": { "name": "alpha" }
+  },
+  {
+    "name": "prod-reporting-db",
+    "description": "PostgreSQL reporting replica for finance dashboards",
+    "kind": "Ssh",
+    "external_host": "db-reporting.prod.example.internal",
+    "default_database_name": "reporting",
+    "group": { "name": "alpha" }
+  },
+  {
+    "name": "prod-bastion",
+    "description": "General production bastion for emergency shell access",
+    "kind": "Ssh",
+    "external_host": "bastion.prod.example.internal",
+    "group": { "name": "ops" }
+  },
+  {
+    "name": "staging-web-01",
+    "description": "Staging web frontend used for release verification",
+    "kind": "Ssh",
+    "external_host": "web01.staging.example.internal",
+    "group": { "name": "beta" }
+  },
+  {
+    "name": "staging-worker-01",
+    "description": "Background worker host for queue and cron validation",
+    "kind": "Ssh",
+    "external_host": "worker01.staging.example.internal",
+    "group": { "name": "beta" }
+  },
+  {
+    "name": "dev-shell-01",
+    "description": "Personal development shell with shared tooling installed",
+    "kind": "Ssh",
+    "external_host": "shell01.dev.example.internal",
+    "group": { "name": "gamma" }
+  },
+  {
+    "name": "uat-kafka-01",
+    "description": "Kafka broker used for UAT integration checks",
+    "kind": "Ssh",
+    "external_host": "kafka01.uat.example.internal",
+    "group": { "name": "ops" }
+  },
+  {
+    "name": "demo-runner-01",
+    "description": "Demo environment runner kept around for docs and support",
+    "kind": "Ssh",
+    "external_host": "runner01.demo.example.internal",
+    "group": { "name": "delta" }
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "transfer": {
+    "tool": "rsync",
+    "direction": "download",
+    "rsync_flags": "-avz --progress",
+    "scp_flags": "-C -p",
+    "local_path": "./captures/reporting",
+    "remote_path": "/srv/reporting/export"
+  },
+  "recent_targets": [
+    "prod-reporting-db",
+    "staging-web-01",
+    "prod-api-01"
+  ]
+}

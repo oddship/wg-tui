@@ -1,0 +1,23 @@
+%HUML v0.2.0
+cache::
+  dir: "/tmp/wgt-demo-cache"
+  max_age: "168h0m0s"
+  ttl: "10m0s"
+  use_stale_on_error: true
+server::
+  insecure_skip_tls_verify: false
+  token: "demo-token"
+  url: "https://warpgate.example.com"
+ssh::
+  binary: "ssh"
+  extra_args::
+    - "-o"
+    - "ServerAliveInterval=30"
+  host: "warpgate.example.com"
+  port: 2222
+  username: "user@example.com"
+ui::
+  approval_open_command: "xdg-open %s"
+  approval_open_mode: "ask"
+  details_pane: "right"
+  preview_lines: 8

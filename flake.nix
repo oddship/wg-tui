@@ -48,6 +48,16 @@
       devShells = forAllSystems (system:
         let
           pkgs = import nixpkgs { inherit system; };
+          libwebsocketsForDocs = pkgs.libwebsockets.overrideAttrs (old: {
+            cmakeFlags = (old.cmakeFlags or [ ]) ++ [
+              "-DLWS_WITH_EVLIB_PLUGINS=OFF"
+              "-DLWS_WITH_LIBUV=ON"
+            ];
+            buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.libuv ];
+          });
+          ttydForDocs = pkgs.ttyd.override {
+            libwebsockets = libwebsocketsForDocs;
+          };
         in
         {
           default = pkgs.mkShell {
@@ -55,6 +65,27 @@
               go
               gopls
             ];
+          };
+
+          docs = pkgs.mkShell {
+            packages = with pkgs; [
+              chromium
+              dejavu_fonts
+              ffmpeg
+              fontconfig
+              go
+              gopls
+              jetbrains-mono
+              python3
+              ttydForDocs
+              vhs
+            ];
+
+            shellHook = ''
+              export VHS_NO_SANDBOX=1
+              export CHROME_PATH="${pkgs.chromium}/bin/chromium"
+              export FONTCONFIG_FILE="${pkgs.fontconfig.out}/etc/fonts/fonts.conf"
+            '';
           };
         });
     };

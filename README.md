@@ -24,6 +24,20 @@ It is built for the common Warpgate workflow:
 - local tunnel mode with a dedicated status page
 - quick `rsync` or `scp` transfers in both directions through Warpgate
 
+## Quick look
+
+Animated overview:
+
+![wg-tui overview](docs/assets/wgt-overview.gif)
+
+Tunnel form:
+
+![wg-tui tunnel form](docs/assets/wgt-tunnel-form.png)
+
+Transfer form:
+
+![wg-tui transfer form](docs/assets/wgt-transfer-form.png)
+
 ## How it works
 
 `wgt` talks to the Warpgate user API using a token:

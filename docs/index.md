@@ -15,6 +15,14 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 
 <br>
 
+## Quick look
+
+![wg-tui overview](assets/wgt-overview.gif)
+
+![wg-tui tunnel form](assets/wgt-tunnel-form.png)
+
+![wg-tui transfer form](assets/wgt-transfer-form.png)
+
 <div class="features">
 <article class="card">
 <header><h3>Cache-first</h3></header>

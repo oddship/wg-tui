@@ -74,6 +74,7 @@ type Model struct {
 	tunnelBack           key.Binding
 	tunnelReconnect      key.Binding
 	tunnelClose          key.Binding
+	skipInit             bool
 }
 
 type formField struct {
@@ -143,7 +144,12 @@ func New(cfgPath string, opts ...Option) Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd { return loadCmd(m.cfgPath, m.cacheDirOverride) }
+func (m Model) Init() tea.Cmd {
+	if m.skipInit {
+		return nil
+	}
+	return loadCmd(m.cfgPath, m.cacheDirOverride)
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
