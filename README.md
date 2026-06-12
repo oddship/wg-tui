@@ -14,14 +14,15 @@ It is built for the common Warpgate workflow:
 
 - TUI-first target picker
 - local fuzzy search over cached targets
+- recent targets rise to the top and show a compact `↺` marker
 - cache-first startup with background refresh
 - first-run onboarding inside the TUI
 - in-app config editing
 - configurable keybindings via config
 - native `ssh` handoff
+- can open approval links locally during SSH browser approval flows
 - local tunnel mode with a dedicated status page
 - quick `rsync` or `scp` transfers in both directions through Warpgate
-- copy SSH or tunnel command to clipboard
 
 ## How it works
 
@@ -69,7 +70,9 @@ You can edit these flags directly in the transfer form before running the comman
 
 For downloads, the remote and local paths are swapped.
 
-If your Warpgate SSH policy requires browser approval or SSO, Warpgate handles that in the SSH session. During tunnel startup or transfer execution, `wgt` may briefly hand control to `ssh` so you can complete approval before returning to the TUI.
+If a normal SSH connect prints a Warpgate approval URL, `wgt` can prompt you to open it locally. You can choose open once, always, or no. The browser opener is configurable.
+
+Tunnel startup and file transfer may still briefly hand control to `ssh` so you can finish approval, SSO, host key confirmation, or other SSH-side prompts.
 
 ## Installation
 
@@ -143,6 +146,16 @@ go build -o wgt ./cmd/wgt
 go run ./cmd/wgt
 ```
 
+Useful flags:
+
+```bash
+wgt --help
+wgt --config /path/to/config.huml
+wgt --cache-path /path/to/cache-dir
+```
+
+`--cache-path` only affects the current run. It does not rewrite `cache.dir` in your saved config.
+
 ### Tunnel mode
 
 Open `wgt`, select a target, then press `t` to open the tunnel form.
@@ -176,21 +189,24 @@ On first launch, `wgt` opens an onboarding flow and asks for:
 - optional SSH host override
 - optional SSH port override
 
-The config is stored in:
+By default, `wgt` stores config in your platform config directory. Cache and local state go in your platform cache directory.
 
-```text
-~/.config/wgt/config.huml
-```
+On Linux, that is usually:
 
-The cache is stored in:
+- config: `~/.config/wgt/config.huml`
+- cache and local state: `~/.cache/wgt/`
 
-```text
-~/.cache/wgt/
-```
+The cache directory also stores recent targets and remembered transfer form state.
+
+Recently used targets rise to the top of the list and show a compact `↺` marker.
 
 ## Configuration
 
 `wgt` stores config in HUML.
+
+You only need to set `cache.dir` if you want to override the platform default.
+
+`ui.approval_open_command` must include `%s`, which `wgt` replaces with the approval URL.
 
 Example:
 
@@ -212,7 +228,7 @@ ssh:
     - "ServerAliveInterval=30"
 
 cache:
-  dir: "~/.cache/wgt"
+  dir: "/path/to/cache/wgt"
   ttl: "10m"
   max_age: "168h"
   use_stale_on_error: true
@@ -220,6 +236,8 @@ cache:
 ui:
   details_pane: "right"
   preview_lines: 8
+  approval_open_mode: "ask"
+  approval_open_command: "xdg-open %s"
 
 keys:
   up::
@@ -293,13 +311,13 @@ Search mode:
 - `esc` again in browse mode - clear the current filter
 - `enter` - connect to selected target
 - blur search before using browse actions such as `t` or `s`
+- when the query is empty, recently used targets are shown first and marked with `↺`
 
 ## Notes
 
 - `wgt` expects you to generate a Warpgate API token in the web UI.
 - Tunnel startup may briefly hand terminal control to `ssh` for approval or login, then return to the TUI once the tunnel is backgrounded.
 - Transfer execution may also briefly hand terminal control to SSH-backed authentication or approval flows.
-- Clipboard support uses `github.com/atotto/clipboard`.
 - On Linux, clipboard support may require `xclip` or `xsel` depending on your environment.
 - `wgt` is cache-first. If cache exists, it starts quickly and refreshes in the background when stale.
 

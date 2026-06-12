@@ -518,7 +518,7 @@ func (m *Model) copySelectedCommand() {
 		return
 	}
 	bin, args := sshpkg.ShellCommand(m.cfg, m.filtered[m.selected].Name)
-	if err := clipboard.WriteAll(bin + " " + strings.Join(args, " ")); err != nil {
+	if err := clipboard.WriteAll(commandText(bin, args)); err != nil {
 		m.status = err.Error()
 		return
 	}
@@ -707,6 +707,8 @@ func (m Model) detailView(width int) string {
 	if t.Description != "" {
 		rows = append(rows, "", lipgloss.NewStyle().Width(width).Render(t.Description))
 	}
+	bin, args := sshpkg.ShellCommand(m.cfg, t.Name)
+	rows = append(rows, commandPreviewRows("SSH command", commandText(bin, args), width)...)
 	if !m.snapshot.FetchedAt.IsZero() {
 		freshness := "fresh"
 		if cache.IsStale(m.snapshot, m.cfg.Cache.TTL) {
@@ -760,6 +762,28 @@ func (m Model) currentPageLabel() string {
 		return "onboarding"
 	default:
 		return "browse"
+	}
+}
+
+func commandText(bin string, args []string) string {
+	parts := append([]string{bin}, args...)
+	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+func commandPreviewRows(label, command string, width int) []string {
+	return commandPreviewRowsWithHint(label, command, "press c to copy this command", width)
+}
+
+func commandPreviewRowsWithHint(label, command, hint string, width int) []string {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return nil
+	}
+	return []string{
+		"",
+		headerStyle.Render(label),
+		lipgloss.NewStyle().Width(width).Render(command),
+		mutedStyle.Render(hint),
 	}
 }
 

@@ -204,7 +204,7 @@ func (m *Model) copyTunnelCommand() {
 		return
 	}
 	bin, args := sshpkg.TunnelCommand(m.cfg, m.tunnel.target, m.tunnel.remotePort, m.tunnel.localPort)
-	if err := clipboard.WriteAll(bin + " " + strings.Join(args, " ")); err != nil {
+	if err := clipboard.WriteAll(commandText(bin, args)); err != nil {
 		m.status = err.Error()
 		return
 	}
@@ -227,8 +227,12 @@ func (m Model) viewTunnel() string {
 
 func (m Model) tunnelDetailView(width int) string {
 	rows := []string{headerStyle.Render("Tunnel")}
+	rows = append(rows, titleStyle.Render(fallback(m.tunnel.target, "No target selected")))
+	if strings.TrimSpace(m.tunnel.target) != "" {
+		bin, args := sshpkg.TunnelCommand(m.cfg, m.tunnel.target, m.tunnel.remotePort, m.tunnel.localPort)
+		rows = append(rows, commandPreviewRows("Tunnel command", commandText(bin, args), width)...)
+	}
 	rows = append(rows,
-		titleStyle.Render(fallback(m.tunnel.target, "No target selected")),
 		fmt.Sprintf("state: %s", m.tunnel.state),
 		fmt.Sprintf("local: 127.0.0.1:%d", m.tunnel.localPort),
 		fmt.Sprintf("remote: 127.0.0.1:%d", m.tunnel.remotePort),

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -217,6 +219,10 @@ func (m Model) updateTunnelForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tunnelLastLocalPort = localPort
 		m.formStatus = ""
 		return m.startTunnel(m.pendingTunnelTarget, remotePort, localPort)
+	}
+	if key.Matches(msg, m.keys.Copy) {
+		m.copyTunnelFormCommand()
+		return m, nil
 	}
 
 	if len(m.fields) == 0 {
@@ -639,6 +645,66 @@ func deriveSSHHost(cfg *cfgpkg.Config) error {
 	return nil
 }
 
+func (m Model) tunnelFormCommand() (string, []string, error) {
+	if strings.TrimSpace(m.pendingTunnelTarget) == "" {
+		return "", nil, fmt.Errorf("no target selected")
+	}
+	remotePort, localPort, err := m.tunnelFormPorts()
+	if err != nil {
+		return "", nil, err
+	}
+	bin, args := sshpkg.TunnelCommand(m.cfg, m.pendingTunnelTarget, remotePort, localPort)
+	return bin, args, nil
+}
+
+func (m Model) tunnelFormCommandPreview() (string, string) {
+	if strings.TrimSpace(m.pendingTunnelTarget) == "" {
+		return "", ""
+	}
+
+	remotePort, remoteValid := previewTunnelPortValue(m.rawFieldValue("tunnel.remote_port"), "<remote-port>")
+	localPort, localValid := previewTunnelPortValue(m.rawFieldValue("tunnel.local_port"), "<local-port>")
+	args := []string{
+		"-N",
+		"-o", "ExitOnForwardFailure=yes",
+		"-L", fmt.Sprintf("%s:127.0.0.1:%s", localPort, remotePort),
+		"-p", strconv.Itoa(m.cfg.SSH.Port),
+		"-l", fmt.Sprintf("%s:%s", m.cfg.SSH.Username, m.pendingTunnelTarget),
+	}
+	args = append(args, m.cfg.SSH.ExtraArgs...)
+	args = append(args, m.cfg.SSH.Host)
+
+	hint := "enter valid ports, then press c to copy this command"
+	if remoteValid && localValid {
+		hint = "press c to copy this command"
+	}
+	return commandText(m.cfg.SSH.Binary, args), hint
+}
+
+func previewTunnelPortValue(value, placeholder string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return placeholder, false
+	}
+	if _, err := parseTunnelPort(value, "preview"); err != nil {
+		return placeholder, false
+	}
+	return value, true
+}
+
+func (m *Model) copyTunnelFormCommand() {
+	bin, args, err := m.tunnelFormCommand()
+	if err != nil {
+		m.formStatus = "enter valid ports to copy tunnel command"
+		return
+	}
+	if err := clipboard.WriteAll(commandText(bin, args)); err != nil {
+		m.formStatus = err.Error()
+		return
+	}
+	m.formStatus = "tunnel command copied"
+}
+
 func rsyncCmd(cfg cfgpkg.Config, target, tool, direction string, flags []string, localPath, remotePath string) tea.Cmd {
 	return func() tea.Msg {
 		var (
@@ -679,10 +745,21 @@ func (m Model) viewForm() string {
 		helpText = "tab/shift+tab to move - left/right to choose options - enter to continue or run transfer - esc to cancel"
 	}
 
+	contentWidth := 72
+	if m.width > 0 {
+		contentWidth = max(40, m.width-8)
+	}
+
 	lines := []string{
 		m.viewTopChrome("wgt", m.formTitle, nil),
 		mutedStyle.Render(helpText),
 		"",
+	}
+	if m.mode == modeTunnelForm {
+		if command, hint := m.tunnelFormCommandPreview(); command != "" {
+			lines = append(lines, commandPreviewRowsWithHint("Tunnel command", command, hint, contentWidth)...)
+			lines = append(lines, "")
+		}
 	}
 	for i, f := range m.fields {
 		label := f.label

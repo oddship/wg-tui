@@ -1,7 +1,7 @@
 ---
 title: wgt
 layout: landing
-description: Browse Warpgate targets, search locally, launch SSH, open tunnels, and run file transfers.
+description: Browse Warpgate targets, search locally, reconnect faster with recent targets, launch SSH, open tunnels, and run file transfers.
 ---
 
 # wgt
@@ -25,13 +25,13 @@ Loads cached targets immediately and refreshes in the background when needed.
 <article class="card">
 <header><h3>Local search</h3></header>
 
-Fuzzy search runs locally so target discovery stays fast once cached.
+Fuzzy search runs locally so target discovery stays fast once cached, and recently used targets float to the top.
 </article>
 
 <article class="card">
 <header><h3>Native SSH</h3></header>
 
-Launches your system `ssh` client using Warpgate's username plus target format.
+Launches your system `ssh` client using Warpgate's username plus target format and can open approval links locally when a connect needs it.
 </article>
 
 <article class="card">
@@ -49,8 +49,8 @@ Run `rsync` or `scp` uploads and downloads through Warpgate without leaving the 
 
 ## What it does
 
-`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, launches SSH for the selected target, can open local tunnels through Warpgate, and can run quick file transfers through the selected target.
+`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, brings recent targets back to the top, launches SSH for the selected target, can open local tunnels through Warpgate, and can run quick file transfers through the selected target.
 
 ## Status
 
-Early but usable. Current focus is fast target discovery, clean SSH handoff, simple service tunneling, and practical transfer workflows.
+Early but usable. Current focus is fast target discovery, cleaner SSH approval handoff, simple service tunneling, and practical transfer workflows.

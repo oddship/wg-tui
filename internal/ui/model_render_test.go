@@ -166,6 +166,115 @@ func TestBrowseListShowsRecentIndicatorForRecentTarget(t *testing.T) {
 	}
 }
 
+func TestDetailViewShowsSSHCommandAndCopyHint(t *testing.T) {
+	m := New("test")
+	cfg := cfgpkg.Default()
+	cfg.SSH.Username = "user@example.com"
+	cfg.SSH.Host = "warpgate.example.com"
+	m.applyConfig(cfg)
+	m.setTargets([]api.Target{makeRenderTarget("prod-api", "alpha", "")})
+
+	view := ansiPattern.ReplaceAllString(m.detailView(200), "")
+	if !strings.Contains(view, "SSH command") {
+		t.Fatalf("expected SSH command heading, got %q", view)
+	}
+	if !strings.Contains(view, "ssh -p 2222 -l user@example.com:prod-api warpgate.example.com") {
+		t.Fatalf("expected SSH command preview, got %q", view)
+	}
+	if !strings.Contains(view, "press c to copy this command") {
+		t.Fatalf("expected copy hint, got %q", view)
+	}
+}
+
+func TestTunnelDetailViewShowsTunnelCommandAndCopyHint(t *testing.T) {
+	m := New("test")
+	cfg := cfgpkg.Default()
+	cfg.SSH.Username = "user@example.com"
+	cfg.SSH.Host = "warpgate.example.com"
+	m.applyConfig(cfg)
+	m.tunnel.target = "prod-api"
+	m.tunnel.localPort = 15432
+	m.tunnel.remotePort = 5432
+	m.tunnel.state = tunnelOpen
+
+	view := ansiPattern.ReplaceAllString(m.tunnelDetailView(220), "")
+	if !strings.Contains(view, "Tunnel command") {
+		t.Fatalf("expected tunnel command heading, got %q", view)
+	}
+	if !strings.Contains(view, "ssh -N -o ExitOnForwardFailure=yes -L 15432:127.0.0.1:5432 -p 2222 -l user@example.com:prod-api warpgate.example.com") {
+		t.Fatalf("expected tunnel command preview, got %q", view)
+	}
+	if !strings.Contains(view, "press c to copy this command") {
+		t.Fatalf("expected copy hint, got %q", view)
+	}
+}
+
+func TestTunnelViewShowsCommandPreviewNearTop(t *testing.T) {
+	m := New("test")
+	cfg := cfgpkg.Default()
+	cfg.SSH.Username = "user@example.com"
+	cfg.SSH.Host = "warpgate.example.com"
+	m.applyConfig(cfg)
+	m.mode = modeTunnel
+	m.tunnel.target = "prod-api"
+	m.tunnel.localPort = 15432
+	m.tunnel.remotePort = 5432
+	m.tunnel.state = tunnelOpen
+	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 12})
+
+	lines := firstVisibleLines(m.View(), 8)
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "Tunnel command") {
+		t.Fatalf("expected tunnel command to appear near the top of the visible tunnel view, got %q", joined)
+	}
+}
+
+func TestTunnelFormShowsCommandPreviewAndCopyHintWhenPortsAreValid(t *testing.T) {
+	m := New("test")
+	cfg := cfgpkg.Default()
+	cfg.SSH.Username = "user@example.com"
+	cfg.SSH.Host = "warpgate.example.com"
+	m.applyConfig(cfg)
+	m.startTunnelForm("prod-api")
+	m.mode = modeTunnelForm
+	m.fields[0].input.SetValue("5432")
+	m.fields[1].input.SetValue("15432")
+	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 20})
+
+	view := ansiPattern.ReplaceAllString(m.View(), "")
+	if !strings.Contains(view, "Tunnel command") {
+		t.Fatalf("expected tunnel command heading in tunnel form, got %q", view)
+	}
+	if !strings.Contains(view, "ssh -N -o ExitOnForwardFailure=yes -L 15432:127.0.0.1:5432 -p 2222 -l") || !strings.Contains(view, "user@example.com:prod-api warpgate.example.com") {
+		t.Fatalf("expected tunnel command preview in tunnel form, got %q", view)
+	}
+	if !strings.Contains(view, "press c to copy this command") {
+		t.Fatalf("expected copy hint in tunnel form, got %q", view)
+	}
+}
+
+func TestTunnelFormShowsPlaceholderCommandBeforePortsAreEntered(t *testing.T) {
+	m := New("test")
+	cfg := cfgpkg.Default()
+	cfg.SSH.Username = "user@example.com"
+	cfg.SSH.Host = "warpgate.example.com"
+	m.applyConfig(cfg)
+	m.startTunnelForm("prod-api")
+	m.mode = modeTunnelForm
+	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 20})
+
+	view := ansiPattern.ReplaceAllString(m.View(), "")
+	if !strings.Contains(view, "Tunnel command") {
+		t.Fatalf("expected tunnel command heading in empty tunnel form, got %q", view)
+	}
+	if !strings.Contains(view, "-L <local-port>:127.0.0.1:<remote-") || !strings.Contains(view, "port> -p 2222 -l user@example.com:prod-api warpgate.example.com") {
+		t.Fatalf("expected placeholder tunnel command in empty tunnel form, got %q", view)
+	}
+	if !strings.Contains(view, "enter valid ports, then press c to copy this command") {
+		t.Fatalf("expected placeholder copy hint in empty tunnel form, got %q", view)
+	}
+}
+
 func makeRenderTarget(name, group, description string) api.Target {
 	var target api.Target
 	target.Name = name
@@ -176,11 +285,7 @@ func makeRenderTarget(name, group, description string) api.Target {
 }
 
 func visibleLinePrefix(view string, width int) string {
-	for _, raw := range strings.Split(view, "\n") {
-		line := ansiPattern.ReplaceAllString(raw, "")
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
+	for _, line := range firstVisibleLines(view, 1) {
 		runes := []rune(line)
 		if len(runes) > width {
 			runes = runes[:width]
@@ -188,6 +293,21 @@ func visibleLinePrefix(view string, width int) string {
 		return string(runes)
 	}
 	return ""
+}
+
+func firstVisibleLines(view string, limit int) []string {
+	lines := make([]string, 0, limit)
+	for _, raw := range strings.Split(view, "\n") {
+		line := ansiPattern.ReplaceAllString(raw, "")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		lines = append(lines, line)
+		if len(lines) == limit {
+			break
+		}
+	}
+	return lines
 }
 
 func countExactLines(view, want string) int {
