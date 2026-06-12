@@ -164,6 +164,8 @@ The form asks for:
 - remote port
 - local port
 
+The tunnel form also shows the command it is going to run. When the ports are still empty, it shows a placeholder version. Once the ports are valid, it updates to the real command. Press `c` to copy it.
+
 When you type a remote port first, the local port mirrors it until you explicitly change the local port. After submission, `wgt` switches to a dedicated tunnel page that shows status and lets you close or reconnect the tunnel.
 
 ### Transfer mode
@@ -279,12 +281,13 @@ Browse mode:
 - `s` - open transfer form for the selected target
 - `r` - refresh targets from Warpgate
 - `e` - edit config
-- `c` - copy SSH command
+- `c` - copy the SSH command shown in the details panel
 - `?` - toggle help
 - `q` - quit
 
 Tunnel form:
 - type remote and local ports
+- `c` - copy the tunnel command shown in the form
 - `enter` - start tunnel
 - `esc` - cancel and return to the target list
 
@@ -298,7 +301,7 @@ Transfer form:
 Tunnel page:
 - `x` - close tunnel
 - `r` - reconnect tunnel
-- `c` - copy tunnel command
+- `c` - copy the tunnel command shown on the page
 - `b` - close tunnel and return to target list
 - `?` - toggle help
 - `q` - quit

@@ -98,6 +98,10 @@ When you connect, it launches:
 ssh -p <port> -l '<warpgate-username>:<target>' <warpgate-host>
 ```
 
+The details panel shows that SSH command directly, and you can press `c` to copy it.
+
 Recently used targets rise to the top of the list and show a compact `↺` marker.
 
 If a normal SSH connect prints a Warpgate approval URL, `wgt` can prompt you to open it locally. You can choose open once, always, or no.
+
+If you open the tunnel form with `t`, `wgt` also shows the tunnel command there before launch. Press `c` to copy it from the form or from the tunnel page.
