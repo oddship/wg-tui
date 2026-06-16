@@ -10,7 +10,6 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 
 <div class="hstack">
   <a href="guide/quickstart/" class="button">Get started</a>
-  <a href="guide/docs-capture-pipeline/" class="button ghost">Docs capture pipeline</a>
   <a href="https://github.com/oddship/wg-tui" class="button outline">GitHub</a>
 </div>
 
