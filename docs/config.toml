@@ -2,6 +2,10 @@ site_name = "wgt"
 base_path = "/wg-tui"
 
 [[topnav]]
+title = "Changelog"
+url = "/changelog/"
+
+[[topnav]]
 title = "GitHub"
 url = "https://github.com/oddship/wg-tui"
 icon = "github"
