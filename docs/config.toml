@@ -1,5 +1,6 @@
 site_name = "wgt"
 base_path = "/wg-tui"
+footer_text = "© [oddship](https://github.com/oddship) 2026"
 
 [[topnav]]
 title = "Changelog"
