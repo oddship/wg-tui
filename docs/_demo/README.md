@@ -1,6 +1,6 @@
 # Docs capture pipeline
 
-This directory holds the versioned inputs for regenerating `wg-tui` README and docs media.
+This directory holds the versioned inputs for regenerating `wg-tui` README and published docs media.
 
 ## What is versioned here
 - `manifest.md` - scenario and asset contract
@@ -29,7 +29,7 @@ The script:
 - builds the docs-only helper binary from `cmd/wgt-docs`
 - asks that helper to generate the VHS tapes from the authoritative scenario registry in `internal/ui/doc_capture.go`
 - writes intermediates under `${BOSUN_WORKSPACE:-workspace}/scratch/wg-tui-doc-capture/`
-- writes final assets to `docs/assets/`
+- writes final assets to `docs/_static/assets/`
 - keeps `PNG` stills plus `GIF`, `MP4`, and `WebM` variants for the animated overview
 - renders screenshots and recordings through VHS so the published assets come from a real xterm.js terminal surface instead of ANSI-to-SVG conversion
 
@@ -38,3 +38,4 @@ The script:
 - Scenario names, VHS wait patterns, grouping, screenshot filenames, and the tour sequence all come from the single registry in `internal/ui/doc_capture.go`.
 - Search and similar flows are replayed through real model key handling, not hand-drawn mockups.
 - If the UI changes, update `manifest.md` and the scenario registry together so regenerated assets keep stable names and coverage.
+- This directory is intentionally prefixed with `_` so moat skips it during page generation while keeping the capture inputs versioned next to the docs.

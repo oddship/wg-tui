@@ -28,15 +28,15 @@ It is built for the common Warpgate workflow:
 
 Animated overview:
 
-![wg-tui overview](docs/assets/wgt-overview.gif)
+![wg-tui overview](docs/_static/assets/wgt-overview.gif)
 
 Tunnel form:
 
-![wg-tui tunnel form](docs/assets/wgt-tunnel-form.png)
+![wg-tui tunnel form](docs/_static/assets/wgt-tunnel-form.png)
 
 Transfer form:
 
-![wg-tui transfer form](docs/assets/wgt-transfer-form.png)
+![wg-tui transfer form](docs/_static/assets/wgt-transfer-form.png)
 
 ## How it works
 

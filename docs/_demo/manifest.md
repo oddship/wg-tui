@@ -11,7 +11,7 @@ This directory defines the versioned inputs and expected outputs for the local d
 - Form layout: `JetBrains Mono`, `17px`, line height `1.05`, `1600x1100`
 - Theme: `vhs-theme.json`
 - Intermediates: `${BOSUN_WORKSPACE:-workspace}/scratch/wg-tui-doc-capture/`
-- Final checked-in assets: `docs/assets/`
+- Final checked-in assets: `docs/_static/assets/`
 
 ## Fixture inputs
 - `fixtures/config.huml` - deterministic config for command previews and forms
@@ -44,3 +44,5 @@ This directory defines the versioned inputs and expected outputs for the local d
 - A second pass captures onboarding and config-editor PNG stills.
 
 If the UI changes, update this manifest first, then regenerate assets with `./scripts/capture-docs.sh`.
+
+This directory is prefixed with `_` so moat skips it during page generation.

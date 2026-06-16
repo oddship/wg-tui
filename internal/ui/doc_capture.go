@@ -368,7 +368,7 @@ func writeDocCaptureVHSScene(b *strings.Builder, spec docCaptureSceneSpec, binar
 }
 
 func newDocCaptureModel(fixtures DocCaptureFixtures) Model {
-	m := New("docs/demo/fixtures/config.huml")
+	m := New("docs/_demo/fixtures/config.huml")
 	m.skipInit = true
 	m.applyConfig(fixtures.Config)
 	m.applyState(fixtures.State)
@@ -391,7 +391,7 @@ func docCaptureSearchProdModel(fixtures DocCaptureFixtures) (Model, error) {
 }
 
 func docScenarioOnboardingModel(fixtures DocCaptureFixtures) (Model, error) {
-	m := New("docs/demo/fixtures/config.huml")
+	m := New("docs/_demo/fixtures/config.huml")
 	m.skipInit = true
 	m.applyConfig(fixtures.Config)
 	m.mode = modeOnboarding
@@ -401,7 +401,7 @@ func docScenarioOnboardingModel(fixtures DocCaptureFixtures) (Model, error) {
 }
 
 func docScenarioConfigEditorModel(fixtures DocCaptureFixtures) (Model, error) {
-	m := New("docs/demo/fixtures/config.huml")
+	m := New("docs/_demo/fixtures/config.huml")
 	m.skipInit = true
 	m.applyConfig(fixtures.Config)
 	m.mode = modeConfig

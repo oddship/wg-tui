@@ -22,7 +22,7 @@ func main() {
 	fs.StringVar(&scenario, "scenario", "browse-overview", "docs capture scenario")
 	fs.BoolVar(&listScenarios, "list-scenarios", false, "list available docs scenarios")
 	fs.StringVar(&tapeDir, "write-vhs-tapes", "", "write VHS tape files to this directory")
-	fs.StringVar(&assetDir, "asset-dir", "docs/assets", "asset directory path used inside generated VHS tapes")
+	fs.StringVar(&assetDir, "asset-dir", "docs/_static/assets", "asset directory path used inside generated VHS tapes")
 	fs.StringVar(&scratchDir, "scratch-dir", "workspace/scratch/wg-tui-doc-capture", "scratch directory path used inside generated VHS tapes")
 	fs.StringVar(&binaryPath, "binary", "", "path to the docs helper binary used inside generated VHS tapes")
 	fs.Parse(os.Args[1:])

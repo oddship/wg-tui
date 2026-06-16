@@ -10,8 +10,8 @@ fi
 SCRATCH_DIR="${WG_TUI_CAPTURE_SCRATCH:-$WORKSPACE_ROOT/scratch/wg-tui-doc-capture}"
 BIN_DIR="$SCRATCH_DIR/bin"
 TAPE_DIR="$SCRATCH_DIR/tapes"
-ASSET_DIR="$ROOT/docs/assets"
-ASSET_DIR_REL="docs/assets"
+ASSET_DIR="$ROOT/docs/_static/assets"
+ASSET_DIR_REL="docs/_static/assets"
 SCRATCH_DIR_REL=""
 DOCS_BIN="$BIN_DIR/wgt-docs"
 

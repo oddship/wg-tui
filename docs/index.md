@@ -10,6 +10,7 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 
 <div class="hstack">
   <a href="guide/quickstart/" class="button">Get started</a>
+  <a href="guide/docs-capture-pipeline/" class="button ghost">Docs capture pipeline</a>
   <a href="https://github.com/oddship/wg-tui" class="button outline">GitHub</a>
 </div>
 
@@ -17,11 +18,11 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 
 ## Quick look
 
-![wg-tui overview](assets/wgt-overview.gif)
+![wg-tui overview](_static/assets/wgt-overview.gif)
 
-![wg-tui tunnel form](assets/wgt-tunnel-form.png)
+![wg-tui tunnel form](_static/assets/wgt-tunnel-form.png)
 
-![wg-tui transfer form](assets/wgt-transfer-form.png)
+![wg-tui transfer form](_static/assets/wgt-transfer-form.png)
 
 <div class="features">
 <article class="card">
