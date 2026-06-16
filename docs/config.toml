@@ -16,4 +16,3 @@ link = "https://oddship.github.io/wg-tui"
 
 [extra]
 tagline = "Warpgate target picker for the terminal"
-footer = '&copy; <a href="https://github.com/oddship">oddship</a>'
