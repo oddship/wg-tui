@@ -78,11 +78,54 @@ func buildApprovalOpenCommand(template, url string) (string, []string, error) {
 	if strings.Count(template, "%s") != 1 {
 		return "", nil, fmt.Errorf("approval open command must contain exactly one %%s placeholder")
 	}
-	parts := strings.Fields(strings.Replace(template, "%s", url, 1))
+	parts, err := splitCommandTemplate(template)
+	if err != nil {
+		return "", nil, err
+	}
 	if len(parts) == 0 {
 		return "", nil, fmt.Errorf("approval open command expanded to an empty command")
 	}
+	for i, part := range parts {
+		parts[i] = strings.Replace(part, "%s", url, 1)
+	}
 	return parts[0], parts[1:], nil
+}
+
+// splitCommandTemplate splits on whitespace honouring single and double quotes,
+// so the URL is substituted into one argument and never re-split.
+func splitCommandTemplate(template string) ([]string, error) {
+	var (
+		parts   []string
+		current strings.Builder
+		quote   rune
+		inToken bool
+	)
+	for _, r := range template {
+		switch {
+		case quote != 0 && r == quote:
+			quote = 0
+		case quote != 0:
+			current.WriteRune(r)
+		case r == '\'' || r == '"':
+			quote, inToken = r, true
+		case r == ' ' || r == '\t':
+			if inToken {
+				parts = append(parts, current.String())
+				current.Reset()
+				inToken = false
+			}
+		default:
+			current.WriteRune(r)
+			inToken = true
+		}
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("approval open command has an unterminated quote")
+	}
+	if inToken {
+		parts = append(parts, current.String())
+	}
+	return parts, nil
 }
 
 func (c *connectExecCommand) SetStdin(r io.Reader)  { c.stdin = r }

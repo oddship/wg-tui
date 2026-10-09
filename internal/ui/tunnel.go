@@ -267,8 +267,8 @@ func (m Model) browseHelpBindings() helpBindings {
 	tunnelBinding := cloneBinding(m.keys.Tunnel, "tunnel")
 	rsyncBinding := cloneBinding(m.keys.Rsync, "rsync")
 	copyBinding := cloneBinding(m.keys.Copy, "copy ssh")
-	short := []key.Binding{m.keys.Search, connectBinding, tunnelBinding, rsyncBinding, m.keys.EditConfig, m.keys.Refresh, m.keys.Quit}
-	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.PageUp, m.keys.PageDown, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding, rsyncBinding}, {m.keys.Refresh, m.keys.EditConfig, copyBinding, m.keys.Help, m.keys.Quit}}
+	short := []key.Binding{m.keys.Search, connectBinding, tunnelBinding, rsyncBinding, m.keys.EditConfig, m.keys.Profile, m.keys.Refresh, m.keys.Quit}
+	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.PageUp, m.keys.PageDown, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding, rsyncBinding}, {m.keys.Refresh, m.keys.EditConfig, m.keys.Profile, copyBinding, m.keys.Help, m.keys.Quit}}
 	if m.cfg.UI.DetailsPane != "right" || m.width < 72 {
 		full = append(full, []key.Binding{key.NewBinding(key.WithKeys("alt+up", "alt+down"), key.WithHelp("alt+up/down", "scroll details"))})
 	}

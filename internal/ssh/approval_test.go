@@ -22,6 +22,41 @@ func TestBuildApprovalOpenCommand(t *testing.T) {
 	}
 }
 
+func TestBuildApprovalOpenCommandStripsQuotes(t *testing.T) {
+	url := "https://warpgate.example.com/@warpgate#/login/123e4567-e89b-12d3-a456-426614174000"
+	cases := map[string][]string{
+		"firefox '%s'":                       {url},
+		`firefox "%s"`:                       {url},
+		`firefox --new-tab '%s'`:             {"--new-tab", url},
+		`'/opt/My Browser/browser' --url=%s`: {"--url=" + url},
+	}
+	for template, want := range cases {
+		_, args, err := buildApprovalOpenCommand(template, url)
+		if err != nil {
+			t.Fatalf("buildApprovalOpenCommand(%q): %v", template, err)
+		}
+		if !reflect.DeepEqual(args, want) {
+			t.Fatalf("template %q: want %#v got %#v", template, want, args)
+		}
+	}
+}
+
+func TestBuildApprovalOpenCommandKeepsURLAsSingleArg(t *testing.T) {
+	_, args, err := buildApprovalOpenCommand("xdg-open %s", "https://example.com/a b;rm -rf ~")
+	if err != nil {
+		t.Fatalf("buildApprovalOpenCommand: %v", err)
+	}
+	if len(args) != 1 {
+		t.Fatalf("expected url to stay a single argument, got %#v", args)
+	}
+}
+
+func TestBuildApprovalOpenCommandRejectsUnterminatedQuote(t *testing.T) {
+	if _, _, err := buildApprovalOpenCommand("firefox '%s", "https://example.com"); err == nil {
+		t.Fatal("expected unterminated quote to fail")
+	}
+}
+
 func TestBuildApprovalOpenCommandRejectsMissingPlaceholder(t *testing.T) {
 	if _, _, err := buildApprovalOpenCommand("xdg-open", "https://warpgate.example.com/@warpgate#/login/123e4567-e89b-12d3-a456-426614174000"); err == nil {
 		t.Fatal("expected missing placeholder to fail")
