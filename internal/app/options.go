@@ -12,6 +12,7 @@ import (
 type Options struct {
 	ConfigPath string
 	CachePath  string
+	Profile    string
 	ShowHelp   bool
 }
 
@@ -21,6 +22,7 @@ func ParseOptions(args []string) (Options, error) {
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.ConfigPath, "config", opts.ConfigPath, "path to config.huml")
 	fs.StringVar(&opts.CachePath, "cache-path", "", "override cache/state dir for this run")
+	fs.StringVar(&opts.Profile, "profile", "", "profile to use for this run")
 	fs.BoolVar(&opts.ShowHelp, "help", false, "show help")
 	fs.BoolVar(&opts.ShowHelp, "h", false, "show help")
 	if err := fs.Parse(args); err != nil {
@@ -41,6 +43,7 @@ func Usage() string {
 Options:
   --config <path>      Path to config.huml (default: %s)
   --cache-path <dir>   Override cache/state dir for this run
+  --profile <name>     Profile to use for this run (default: default_profile)
   --help, -h           Show help
 `, cfgpkg.ConfigPath())
 }

@@ -40,3 +40,16 @@ func TestLoadStateMissing(t *testing.T) {
 		t.Fatal("expected missing state file to fail")
 	}
 }
+
+func TestLastProfileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	if got := LoadLastProfile(dir); got != "" {
+		t.Fatalf("expected no last profile, got %q", got)
+	}
+	if err := SaveLastProfile(dir, "staging"); err != nil {
+		t.Fatalf("SaveLastProfile: %v", err)
+	}
+	if got := LoadLastProfile(dir); got != "staging" {
+		t.Fatalf("expected staging, got %q", got)
+	}
+}

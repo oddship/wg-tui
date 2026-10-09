@@ -2,8 +2,33 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+var profileNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func ValidateProfileName(name string) error {
+	if !profileNamePattern.MatchString(name) {
+		return fmt.Errorf("invalid profile name %q: use letters, digits, - or _", name)
+	}
+	return nil
+}
+
+func validateProfiles(cfg Config) error {
+	if len(cfg.Profiles) == 0 {
+		return fmt.Errorf("no profiles configured")
+	}
+	for name := range cfg.Profiles {
+		if err := ValidateProfileName(name); err != nil {
+			return err
+		}
+	}
+	if _, ok := cfg.Profiles[cfg.DefaultProfile]; !ok {
+		return fmt.Errorf("default_profile %q does not match any profile", cfg.DefaultProfile)
+	}
+	return nil
+}
 
 func validate(cfg Config) error {
 	if err := validateApprovalOpenMode(cfg.UI.ApprovalOpenMode); err != nil {
@@ -29,6 +54,7 @@ func validate(cfg Config) error {
 		{name: "rsync", keys: cfg.Keys.Rsync},
 		{name: "refresh", keys: cfg.Keys.Refresh},
 		{name: "edit_config", keys: cfg.Keys.EditConfig},
+		{name: "profile", keys: cfg.Keys.Profile},
 		{name: "copy", keys: cfg.Keys.Copy},
 		{name: "help", keys: cfg.Keys.Help},
 		{name: "quit", keys: cfg.Keys.Quit},

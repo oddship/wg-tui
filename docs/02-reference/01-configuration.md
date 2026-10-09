@@ -11,7 +11,7 @@ On Linux, that is usually:
 - config: `~/.config/wgt/config.huml`
 - cache and local state: `~/.cache/wgt/`
 
-The cache directory stores:
+The cache directory holds a `last_profile` file and one subdirectory per profile, for example `~/.cache/wgt/prod/`. Each one stores:
 
 - cached Warpgate target snapshots
 - recent targets
@@ -25,9 +25,22 @@ The cache directory stores:
 wgt --help
 wgt --config /path/to/config.huml
 wgt --cache-path /path/to/cache-dir
+wgt --profile staging
 ```
 
-`--cache-path` only affects the current run. It does not rewrite `cache.dir` in your saved config.
+`--cache-path` and `--profile` only affect the current run. They do not rewrite `cache.dir` or `default_profile` in your saved config.
+
+## Profiles
+
+Each profile points at one Warpgate upstream and has its own `server` and `ssh` settings. `cache`, `ui` and `keys` are shared by all profiles.
+
+- at startup `wgt` opens `--profile` if passed, otherwise the last profile you used, otherwise `default_profile`
+- the last used profile is stored in `<cache.dir>/last_profile`; a profile picked with `--profile` is not remembered
+- press `p` in the target list to open the profile picker, then `enter` to switch or `n` to create a new profile
+- press `e` to edit, or rename, the active profile
+- profile names may only contain letters, digits, `-` and `_`
+
+Configs from older versions with top-level `server` and `ssh` sections still load. They are treated as a profile named `default` and written in the new shape on the next save.
 
 ## Example config
 
@@ -36,19 +49,28 @@ You only need to set `cache.dir` if you want to override the platform default.
 ```huml
 %HUML v0.2.0
 
-server:
-  url: "https://warpgate.example.com"
-  token: "<warpgate-api-token>"
-  insecure_skip_tls_verify: false
+default_profile: "prod"
 
-ssh:
-  username: "user@example.com"
-  host: "warpgate.example.com"
-  port: 2222
-  binary: "ssh"
-  extra_args::
-    - "-o"
-    - "ServerAliveInterval=30"
+profiles::
+  prod::
+    server::
+      url: "https://warpgate.example.com"
+      token: "<warpgate-api-token>"
+      insecure_skip_tls_verify: false
+    ssh::
+      username: "user@example.com"
+      host: "warpgate.example.com"
+      port: 2222
+      binary: "ssh"
+      extra_args::
+        - "-o"
+        - "ServerAliveInterval=30"
+  staging::
+    server::
+      url: "https://warpgate-staging.example.com"
+      token: "<warpgate-api-token>"
+    ssh::
+      username: "user@example.com"
 
 cache:
   dir: "/path/to/cache/wgt"
@@ -89,6 +111,8 @@ keys:
     - "r"
   edit_config::
     - "e"
+  profile::
+    - "p"
   copy::
     - "c"
   help::

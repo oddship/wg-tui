@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,11 +30,13 @@ const (
 	modeTunnelForm
 	modeRsyncForm
 	modeTunnel
+	modeProfiles
 )
 
 type Model struct {
 	cfgPath          string
 	cacheDirOverride string
+	profileOverride  string
 	cfg              cfgpkg.Config
 	keys             cfgpkg.KeyMap
 	client           *api.Client
@@ -56,6 +59,8 @@ type Model struct {
 	formIndex            int
 	fields               []formField
 	formStatus           string
+	formProfile          string
+	profileIndex         int
 	pendingTunnelTarget  string
 	pendingRsyncTarget   string
 	rsyncLastTool        string
@@ -95,6 +100,7 @@ type loadedMsg struct {
 }
 
 type refreshMsg struct {
+	profile  string
 	snapshot cache.Snapshot
 	status   string
 	err      error
@@ -119,6 +125,12 @@ type Option func(*Model)
 func WithCacheDirOverride(dir string) Option {
 	return func(m *Model) {
 		m.cacheDirOverride = strings.TrimSpace(dir)
+	}
+}
+
+func WithProfile(name string) Option {
+	return func(m *Model) {
+		m.profileOverride = strings.TrimSpace(name)
 	}
 }
 
@@ -148,7 +160,7 @@ func (m Model) Init() tea.Cmd {
 	if m.skipInit {
 		return nil
 	}
-	return loadCmd(m.cfgPath, m.cacheDirOverride)
+	return loadCmd(m.cfgPath, m.cacheDirOverride, m.profileOverride)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -160,6 +172,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleLoaded(msg)
 	case refreshMsg:
 		return m.handleRefresh(msg)
+	case profileLoadedMsg:
+		return m.handleProfileLoaded(msg)
 	case configSavedMsg:
 		return m.handleConfigSaved(msg)
 	case sshpkg.ExecFinishedMsg:
@@ -184,6 +198,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRsyncForm(msg)
 		case modeTunnel:
 			return m.updateTunnel(msg)
+		case modeProfiles:
+			return m.updateProfilePicker(msg)
 		default:
 			return m, nil
 		}
@@ -214,20 +230,27 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.applyConfig(msg.cfg)
-	m.applyState(msg.state)
-	m.snapshot = msg.snapshot
-	m.setTargets(msg.snapshot.Targets)
-	m.status = msg.status
+	return m.showCached(msg.snapshot, msg.state, msg.status)
+}
 
-	if msg.snapshot.FetchedAt.IsZero() || cache.IsStale(msg.snapshot, m.cfg.Cache.TTL) {
+func (m Model) showCached(snap cache.Snapshot, state cache.State, status string) (tea.Model, tea.Cmd) {
+	m.applyState(state)
+	m.snapshot = snap
+	m.setTargets(snap.Targets)
+	m.status = status
+
+	if snap.FetchedAt.IsZero() || cache.IsStale(snap, m.cfg.Cache.TTL) {
 		m.status = joinStatus(m.status, "refreshing in background...")
-		return m, refreshCmd(m.client)
+		return m, refreshCmd(m.cfg.Profile, m.client)
 	}
 
 	return m, nil
 }
 
 func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
+	if msg.profile != m.cfg.Profile {
+		return m, nil
+	}
 	if msg.err != nil {
 		m.status = msg.err.Error()
 		return m, nil
@@ -245,8 +268,13 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	newProfile := msg.cfg.Profile != m.cfg.Profile && m.formProfile == ""
 	m.applyConfig(msg.cfg)
+	if newProfile {
+		m.applyState(cache.State{})
+	}
 	m.applySnapshot(msg.snapshot)
+	m.persistLastProfile()
 	m.status = msg.status
 	m.mode = modeBrowse
 	m.formStatus = ""
@@ -298,9 +326,11 @@ func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSelection(m.visibleRows())
 	case key.Matches(msg, m.keys.Refresh):
 		m.status = "refreshing..."
-		return m, refreshCmd(m.client)
+		return m, refreshCmd(m.cfg.Profile, m.client)
 	case key.Matches(msg, m.keys.EditConfig):
 		m.openConfigEditor()
+	case key.Matches(msg, m.keys.Profile):
+		m.openProfilePicker()
 	case key.Matches(msg, m.keys.Connect):
 		return m.connectSelected()
 	case key.Matches(msg, m.keys.Tunnel):
@@ -360,7 +390,14 @@ func (m *Model) applyConfig(cfg cfgpkg.Config) {
 }
 
 func (m Model) cacheDir() string {
-	return resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride)
+	return profileCacheDir(resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride), m.cfg.Profile)
+}
+
+func profileCacheDir(dir, profile string) string {
+	if dir == "" || profile == "" {
+		return dir
+	}
+	return filepath.Join(dir, profile)
 }
 
 func resolveCacheDir(configDir, override string) string {
@@ -440,6 +477,12 @@ func (m *Model) persistState() {
 		return
 	}
 	_ = cache.SaveState(m.cacheDir(), m.stateSnapshot())
+}
+
+func (m *Model) persistLastProfile() {
+	if dir := resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride); dir != "" {
+		_ = cache.SaveLastProfile(dir, m.cfg.Profile)
+	}
 }
 
 func (m *Model) applySnapshot(snap cache.Snapshot) {
@@ -547,7 +590,7 @@ func (m *Model) copySelectedCommand() {
 	m.status = "ssh command copied"
 }
 
-func loadCmd(cfgPath, cacheDirOverride string) tea.Cmd {
+func loadCmd(cfgPath, cacheDirOverride, profile string) tea.Cmd {
 	return func() tea.Msg {
 		if _, err := os.Stat(cfgPath); err != nil {
 			if os.IsNotExist(err) {
@@ -561,29 +604,46 @@ func loadCmd(cfgPath, cacheDirOverride string) tea.Cmd {
 			return loadedMsg{err: err, status: "failed to load config - fix values below"}
 		}
 
-		cacheDir := resolveCacheDir(cfg.Cache.Dir, cacheDirOverride)
-		snap, err := cache.Load(cacheDir)
-		state, stateErr := cache.LoadState(cacheDir)
-		status := "loaded config"
+		rootDir := resolveCacheDir(cfg.Cache.Dir, cacheDirOverride)
+		profileStatus := ""
 		switch {
-		case err == nil:
-			status = fmt.Sprintf("loaded %d cached targets", len(snap.Targets))
-		case err != nil && !cache.Missing(err):
-			status = "cache unavailable"
+		case profile != "":
+			if err := cfg.Use(profile); err != nil {
+				profileStatus = fmt.Sprintf("%v - using %s", err, cfg.Profile)
+			}
+		case rootDir != "":
+			if last := cache.LoadLastProfile(rootDir); last != "" {
+				_ = cfg.Use(last)
+			}
 		}
 
-		if stateErr != nil && !cache.Missing(stateErr) {
-			status = joinStatus(status, "state unavailable")
-		}
-
-		return loadedMsg{cfg: cfg, snapshot: snap, state: state, status: status}
+		cacheDir := profileCacheDir(rootDir, cfg.Profile)
+		snap, state, status := loadCache(cacheDir)
+		return loadedMsg{cfg: cfg, snapshot: snap, state: state, status: joinStatus(profileStatus, status)}
 	}
 }
 
-func refreshCmd(client *api.Client) tea.Cmd {
+func loadCache(cacheDir string) (cache.Snapshot, cache.State, string) {
+	snap, err := cache.Load(cacheDir)
+	state, stateErr := cache.LoadState(cacheDir)
+	status := "loaded config"
+	switch {
+	case err == nil:
+		status = fmt.Sprintf("loaded %d cached targets", len(snap.Targets))
+	case !cache.Missing(err):
+		status = "cache unavailable"
+	}
+
+	if stateErr != nil && !cache.Missing(stateErr) {
+		status = joinStatus(status, "state unavailable")
+	}
+	return snap, state, status
+}
+
+func refreshCmd(profile string, client *api.Client) tea.Cmd {
 	return func() tea.Msg {
 		if client == nil {
-			return refreshMsg{err: fmt.Errorf("client not configured")}
+			return refreshMsg{profile: profile, err: fmt.Errorf("client not configured")}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -591,15 +651,15 @@ func refreshCmd(client *api.Client) tea.Cmd {
 
 		info, err := client.GetInfo(ctx)
 		if err != nil {
-			return refreshMsg{err: err}
+			return refreshMsg{profile: profile, err: err}
 		}
 		targets, err := client.GetTargets(ctx)
 		if err != nil {
-			return refreshMsg{err: err}
+			return refreshMsg{profile: profile, err: err}
 		}
 
 		snap := cache.Snapshot{FetchedAt: time.Now(), Info: info, Targets: targets}
-		return refreshMsg{snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
+		return refreshMsg{profile: profile, snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
 	}
 }
 
@@ -637,6 +697,8 @@ func (m Model) View() string {
 		return m.viewBrowse()
 	case modeTunnel:
 		return m.viewTunnel()
+	case modeProfiles:
+		return m.viewProfiles()
 	default:
 		return m.viewForm()
 	}
@@ -757,6 +819,9 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 		" ",
 		modeActiveStyle.Render(m.currentPageLabel()),
 	)
+	if m.showProfileBadge() {
+		header = lipgloss.JoinHorizontal(lipgloss.Center, header, " ", modeInactiveStyle.Render(m.cfg.Profile))
+	}
 	rows := []string{header}
 	if strings.TrimSpace(summary) != "" {
 		rows = append(rows, mutedStyle.Render(summary))
@@ -765,6 +830,15 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 		rows = append(rows, shortcuts)
 	}
 	return strings.Join(rows, "\n")
+}
+
+func (m Model) showProfileBadge() bool {
+	switch {
+	case m.mode == modeOnboarding, m.mode == modeConfig && m.formProfile == "":
+		return false
+	default:
+		return strings.TrimSpace(m.cfg.Profile) != ""
+	}
 }
 
 func (m Model) currentPageLabel() string {
@@ -782,6 +856,8 @@ func (m Model) currentPageLabel() string {
 		return "config"
 	case modeOnboarding:
 		return "onboarding"
+	case modeProfiles:
+		return "profiles"
 	default:
 		return "browse"
 	}

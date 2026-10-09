@@ -1,8 +1,11 @@
 package config
 
 import (
+	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -10,6 +13,8 @@ import (
 const (
 	appDirName            = "wgt"
 	defaultConfigFileName = "config.huml"
+
+	DefaultProfileName = "default"
 )
 
 var (
@@ -19,11 +24,23 @@ var (
 )
 
 type Config struct {
+	DefaultProfile string             `koanf:"default_profile"`
+	Profiles       map[string]Profile `koanf:"profiles"`
+
+	// Profile, Server and SSH hold the active profile, set via Use. Top-level
+	// server/ssh keys are only read to migrate legacy single-upstream configs.
+	Profile string       `koanf:"-"`
+	Server  ServerConfig `koanf:"server"`
+	SSH     SSHConfig    `koanf:"ssh"`
+
+	Cache CacheConfig `koanf:"cache"`
+	UI    UIConfig    `koanf:"ui"`
+	Keys  KeysConfig  `koanf:"keys"`
+}
+
+type Profile struct {
 	Server ServerConfig `koanf:"server"`
 	SSH    SSHConfig    `koanf:"ssh"`
-	Cache  CacheConfig  `koanf:"cache"`
-	UI     UIConfig     `koanf:"ui"`
-	Keys   KeysConfig   `koanf:"keys"`
 }
 
 type ServerConfig struct {
@@ -74,6 +91,7 @@ type KeysConfig struct {
 	Rsync      []string `koanf:"rsync"`
 	Refresh    []string `koanf:"refresh"`
 	EditConfig []string `koanf:"edit_config"`
+	Profile    []string `koanf:"profile"`
 	Copy       []string `koanf:"copy"`
 	Help       []string `koanf:"help"`
 	Quit       []string `koanf:"quit"`
@@ -81,7 +99,8 @@ type KeysConfig struct {
 
 func Default() Config {
 	return Config{
-		Server: ServerConfig{},
+		Profile: DefaultProfileName,
+		Server:  ServerConfig{},
 		SSH: SSHConfig{
 			Port:   2222,
 			Binary: "ssh",
@@ -110,10 +129,49 @@ func Default() Config {
 			Rsync:      []string{"s"},
 			Refresh:    []string{"r"},
 			EditConfig: []string{"e"},
+			Profile:    []string{"p"},
 			Copy:       []string{"c"},
 			Help:       []string{"?"},
 			Quit:       []string{"q", "ctrl+c"},
 		},
+	}
+}
+
+func (cfg *Config) Use(name string) error {
+	p, ok := cfg.Profiles[name]
+	if !ok {
+		return fmt.Errorf("unknown profile %q", name)
+	}
+	cfg.Profile, cfg.Server, cfg.SSH = name, p.Server, p.SSH
+	return nil
+}
+
+func (cfg Config) ProfileNames() []string {
+	return slices.Sorted(maps.Keys(cfg.Profiles))
+}
+
+func (cfg *Config) RenameActive(name string) {
+	if name == cfg.Profile {
+		return
+	}
+	profiles := maps.Clone(cfg.Profiles)
+	delete(profiles, cfg.Profile)
+	if cfg.DefaultProfile == cfg.Profile {
+		cfg.DefaultProfile = name
+	}
+	cfg.Profiles = profiles
+	cfg.Profile = name
+}
+
+func (cfg *Config) CommitActive() {
+	profiles := maps.Clone(cfg.Profiles)
+	if profiles == nil {
+		profiles = make(map[string]Profile, 1)
+	}
+	profiles[cfg.Profile] = Profile{Server: cfg.Server, SSH: cfg.SSH}
+	cfg.Profiles = profiles
+	if cfg.DefaultProfile == "" {
+		cfg.DefaultProfile = cfg.Profile
 	}
 }
 

@@ -21,7 +21,7 @@ func Run(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	p := tea.NewProgram(ui.New(opts.ConfigPath, ui.WithCacheDirOverride(opts.CachePath)), tea.WithAltScreen())
+	p := tea.NewProgram(ui.New(opts.ConfigPath, ui.WithCacheDirOverride(opts.CachePath), ui.WithProfile(opts.Profile)), tea.WithAltScreen())
 	_, err = p.Run()
 	return err
 }

@@ -18,6 +18,7 @@ It is built for the common Warpgate workflow:
 - cache-first startup with background refresh
 - first-run onboarding inside the TUI
 - in-app config editing
+- multiple Warpgate upstreams via switchable profiles
 - configurable keybindings via config
 - native `ssh` handoff
 - can open approval links locally during SSH browser approval flows

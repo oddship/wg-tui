@@ -25,8 +25,23 @@ func Load(path string) (Config, error) {
 	if !k.Exists("keys.rsync") {
 		cfg.Keys.Rsync = nil
 	}
+	if !k.Exists("keys.profile") {
+		cfg.Keys.Profile = nil
+	}
+	if len(cfg.Profiles) == 0 && k.Exists("server") {
+		cfg.Profiles = map[string]Profile{DefaultProfileName: {Server: cfg.Server, SSH: cfg.SSH}}
+	}
+	if cfg.DefaultProfile == "" && len(cfg.Profiles) > 0 {
+		cfg.DefaultProfile = cfg.ProfileNames()[0]
+	}
 	applyDerived(&cfg)
+	if err := validateProfiles(cfg); err != nil {
+		return Config{}, err
+	}
 	if err := validate(cfg); err != nil {
+		return Config{}, err
+	}
+	if err := cfg.Use(cfg.DefaultProfile); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
@@ -34,6 +49,9 @@ func Load(path string) (Config, error) {
 
 func Save(path string, cfg Config) error {
 	applyDerived(&cfg)
+	if err := validateProfiles(cfg); err != nil {
+		return err
+	}
 	if err := validate(cfg); err != nil {
 		return err
 	}
@@ -48,19 +66,13 @@ func Save(path string, cfg Config) error {
 }
 
 func (cfg Config) toMap() map[string]any {
+	profiles := make(map[string]any, len(cfg.Profiles))
+	for name, p := range cfg.Profiles {
+		profiles[name] = p.toMap()
+	}
 	return map[string]any{
-		"server": map[string]any{
-			"url":                      cfg.Server.URL,
-			"token":                    cfg.Server.Token,
-			"insecure_skip_tls_verify": cfg.Server.InsecureSkipTLSVerify,
-		},
-		"ssh": map[string]any{
-			"username":   cfg.SSH.Username,
-			"host":       cfg.SSH.Host,
-			"port":       cfg.SSH.Port,
-			"binary":     cfg.SSH.Binary,
-			"extra_args": cfg.SSH.ExtraArgs,
-		},
+		"default_profile": cfg.DefaultProfile,
+		"profiles":        profiles,
 		"cache": map[string]any{
 			"dir":                cfg.Cache.Dir,
 			"ttl":                cfg.Cache.TTL.String(),
@@ -77,6 +89,23 @@ func (cfg Config) toMap() map[string]any {
 	}
 }
 
+func (p Profile) toMap() map[string]any {
+	return map[string]any{
+		"server": map[string]any{
+			"url":                      p.Server.URL,
+			"token":                    p.Server.Token,
+			"insecure_skip_tls_verify": p.Server.InsecureSkipTLSVerify,
+		},
+		"ssh": map[string]any{
+			"username":   p.SSH.Username,
+			"host":       p.SSH.Host,
+			"port":       p.SSH.Port,
+			"binary":     p.SSH.Binary,
+			"extra_args": p.SSH.ExtraArgs,
+		},
+	}
+}
+
 func (k KeysConfig) toMap() map[string]any {
 	return map[string]any{
 		"up":          k.Up,
@@ -90,6 +119,7 @@ func (k KeysConfig) toMap() map[string]any {
 		"rsync":       k.Rsync,
 		"refresh":     k.Refresh,
 		"edit_config": k.EditConfig,
+		"profile":     k.Profile,
 		"copy":        k.Copy,
 		"help":        k.Help,
 		"quit":        k.Quit,
@@ -98,11 +128,10 @@ func (k KeysConfig) toMap() map[string]any {
 
 func applyDerived(cfg *Config) {
 	def := Default()
-	if cfg.SSH.Binary == "" {
-		cfg.SSH.Binary = def.SSH.Binary
-	}
-	if cfg.SSH.Port == 0 {
-		cfg.SSH.Port = def.SSH.Port
+	applySSHDefaults(&cfg.SSH, def.SSH)
+	for name, p := range cfg.Profiles {
+		applySSHDefaults(&p.SSH, def.SSH)
+		cfg.Profiles[name] = p
 	}
 	if cfg.Cache.Dir == "" {
 		cfg.Cache.Dir = def.Cache.Dir
@@ -126,6 +155,15 @@ func applyDerived(cfg *Config) {
 		cfg.UI.ApprovalOpenCommand = def.UI.ApprovalOpenCommand
 	}
 	mergeKeys(&cfg.Keys, def.Keys)
+}
+
+func applySSHDefaults(s *SSHConfig, def SSHConfig) {
+	if s.Binary == "" {
+		s.Binary = def.Binary
+	}
+	if s.Port == 0 {
+		s.Port = def.Port
+	}
 }
 
 func mergeKeys(k *KeysConfig, d KeysConfig) {

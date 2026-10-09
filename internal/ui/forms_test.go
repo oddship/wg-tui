@@ -274,7 +274,7 @@ func TestStartFormUsesServerURLForTokenHint(t *testing.T) {
 	m.cfg.Server.URL = "https://warpgate.example.com/"
 	m.startForm(true)
 
-	if got := m.fields[1].hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
+	if got := requireField(t, m.fields, "server.token").hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
 		t.Fatalf("expected token hint from server url, got %q", got)
 	}
 }
@@ -283,13 +283,14 @@ func TestEditingServerURLUpdatesTokenHint(t *testing.T) {
 	m := New("test")
 	m.cfg = cfgpkg.Default()
 	m.startForm(true)
-	m.fields[0].input.SetValue("")
-	m.focusField(0)
+	urlIndex := requireFieldIndex(t, m.fields, "server.url")
+	m.fields[urlIndex].input.SetValue("")
+	m.focusField(urlIndex)
 
 	updatedAny, _ := m.updateConfigForm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("https://warpgate.example.com/")})
 	updated := updatedAny.(Model)
 
-	if got := updated.fields[1].hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
+	if got := requireField(t, updated.fields, "server.token").hint; got != "https://warpgate.example.com/@warpgate/#/profile/api-tokens" {
 		t.Fatalf("expected token hint to update from edited server url, got %q", got)
 	}
 }

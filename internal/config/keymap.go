@@ -14,6 +14,7 @@ type KeyMap struct {
 	Rsync      key.Binding
 	Refresh    key.Binding
 	EditConfig key.Binding
+	Profile    key.Binding
 	Copy       key.Binding
 	Help       key.Binding
 	Quit       key.Binding
@@ -32,6 +33,7 @@ func NewKeyMap(cfg KeysConfig) KeyMap {
 		Rsync:      bindRsync(cfg),
 		Refresh:    bind(cfg.Refresh, "r", "refresh"),
 		EditConfig: bind(cfg.EditConfig, "e", "config"),
+		Profile:    bindProfile(cfg),
 		Copy:       bind(cfg.Copy, "c", "copy ssh"),
 		Help:       bind(cfg.Help, "?", "help"),
 		Quit:       bind(cfg.Quit, "q", "quit"),
@@ -43,7 +45,7 @@ func (k KeyMap) ShortHelp() []key.Binding {
 }
 
 func (k KeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.PageUp, k.PageDown, k.Search, k.Clear, k.Connect, k.Tunnel, k.Rsync}, {k.Refresh, k.EditConfig, k.Copy, k.Help, k.Quit}}
+	return [][]key.Binding{{k.Up, k.Down, k.PageUp, k.PageDown, k.Search, k.Clear, k.Connect, k.Tunnel, k.Rsync}, {k.Refresh, k.EditConfig, k.Profile, k.Copy, k.Help, k.Quit}}
 }
 
 func bind(keys []string, label, desc string) key.Binding {
@@ -73,6 +75,16 @@ func bindRsync(cfg KeysConfig) key.Binding {
 	return bind(nil, "s", "rsync")
 }
 
+func bindProfile(cfg KeysConfig) key.Binding {
+	if len(cfg.Profile) > 0 {
+		return bind(cfg.Profile, "p", "profile")
+	}
+	if keyUsedElsewhere(cfg, "p") {
+		return key.NewBinding()
+	}
+	return bind(nil, "p", "profile")
+}
+
 func keyUsedElsewhere(cfg KeysConfig, candidate string) bool {
 	bindings := [][]string{
 		cfg.Up,
@@ -86,6 +98,7 @@ func keyUsedElsewhere(cfg KeysConfig, candidate string) bool {
 		cfg.Rsync,
 		cfg.Refresh,
 		cfg.EditConfig,
+		cfg.Profile,
 		cfg.Copy,
 		cfg.Help,
 		cfg.Quit,

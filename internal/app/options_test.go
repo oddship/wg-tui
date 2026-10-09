@@ -22,7 +22,7 @@ func TestParseOptionsDefaultsToConfigPath(t *testing.T) {
 }
 
 func TestParseOptionsAcceptsOverrides(t *testing.T) {
-	opts, err := ParseOptions([]string{"--config", "/tmp/custom.huml", "--cache-path", "/tmp/cache"})
+	opts, err := ParseOptions([]string{"--config", "/tmp/custom.huml", "--cache-path", "/tmp/cache", "--profile", "staging"})
 	if err != nil {
 		t.Fatalf("ParseOptions: %v", err)
 	}
@@ -31,6 +31,9 @@ func TestParseOptionsAcceptsOverrides(t *testing.T) {
 	}
 	if opts.CachePath != "/tmp/cache" {
 		t.Fatalf("expected cache path override, got %q", opts.CachePath)
+	}
+	if opts.Profile != "staging" {
+		t.Fatalf("expected profile override, got %q", opts.Profile)
 	}
 }
 

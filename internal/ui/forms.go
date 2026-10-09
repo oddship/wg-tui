@@ -17,13 +17,18 @@ import (
 )
 
 func (m *Model) startForm(edit bool) {
-	cfg := m.cfg
-	if !edit {
-		cfg = cfgpkg.Default()
+	if edit {
+		m.startFormFrom(m.cfg, formTitle(edit), m.cfg.Profile)
+		return
 	}
+	m.startFormFrom(cfgpkg.Default(), formTitle(edit), "")
+}
 
-	m.formTitle = formTitle(edit)
+func (m *Model) startFormFrom(cfg cfgpkg.Config, title, profile string) {
+	m.formTitle = title
+	m.formProfile = profile
 	m.fields = []formField{
+		newField("profile.name", "Profile Name", cfg.Profile, "Letters, digits, - or _. Used to switch between Warpgate upstreams"),
 		newField("server.url", "Server URL", cfg.Server.URL, "Base URL, for example https://warpgate.example.com"),
 		newPasswordField("server.token", "API Token", cfg.Server.Token, apiTokenHint(cfg.Server.URL)),
 		newField("ssh.username", "SSH Username", cfg.SSH.Username, "Warpgate username or email used for SSH"),
@@ -479,13 +484,21 @@ func (f formField) selectView(active bool) string {
 
 func (m Model) formConfig() (cfgpkg.Config, error) {
 	cfg := m.cfg
-	if cfg.Server.URL == "" && m.mode == modeOnboarding {
+	switch {
+	case cfg.Server.URL == "" && m.mode == modeOnboarding:
 		cfg = cfgpkg.Default()
+	case m.formProfile == "":
+		cfg.Server = cfgpkg.ServerConfig{}
+		cfg.SSH = cfgpkg.Default().SSH
 	}
 
 	for _, f := range m.fields {
 		value := strings.TrimSpace(f.input.Value())
 		switch f.key {
+		case "profile.name":
+			if err := m.applyProfileName(&cfg, value); err != nil {
+				return cfg, err
+			}
 		case "server.url":
 			cfg.Server.URL = value
 		case "server.token":
@@ -516,7 +529,23 @@ func (m Model) formConfig() (cfgpkg.Config, error) {
 	if cfg.SSH.Binary == "" {
 		cfg.SSH.Binary = cfgpkg.Default().SSH.Binary
 	}
+	cfg.CommitActive()
 	return cfg, nil
+}
+
+func (m Model) applyProfileName(cfg *cfgpkg.Config, name string) error {
+	if err := cfgpkg.ValidateProfileName(name); err != nil {
+		return err
+	}
+	if _, exists := cfg.Profiles[name]; exists && name != m.formProfile {
+		return fmt.Errorf("profile %q already exists", name)
+	}
+	if m.formProfile == "" {
+		cfg.Profile = name
+		return nil
+	}
+	cfg.RenameActive(name)
+	return nil
 }
 
 func (m Model) tunnelFormPorts() (int, int, error) {

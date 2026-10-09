@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/oddship/wg-tui/internal/api"
@@ -74,6 +75,21 @@ func SaveState(dir string, s State) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "state.json"), b, 0o600)
+}
+
+func LoadLastProfile(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "last_profile"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+func SaveLastProfile(dir, name string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "last_profile"), []byte(name+"\n"), 0o600)
 }
 
 func IsUsable(s Snapshot, maxAge time.Duration) bool {
