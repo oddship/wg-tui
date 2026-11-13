@@ -198,3 +198,12 @@ func (m Model) stackedDetailView(width int) string {
 	rows = append(rows, truncate("SSH: "+commandText(bin, args), width))
 	return strings.Join(rows, "\n")
 }
+
+func renderBoundedPanel(content string, width, height int) string {
+	lines := strings.Split(content, "\n")
+	lines = lines[:min(len(lines), max(1, height-2))]
+	for i := range lines {
+		lines[i] = truncate(lines[i], max(1, width-4))
+	}
+	return panelStyle.Width(max(1, width-2)).Height(max(1, height-2)).Render(strings.Join(lines, "\n"))
+}

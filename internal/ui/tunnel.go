@@ -218,10 +218,15 @@ func (m Model) viewTunnel() string {
 		m.width = 100
 	}
 
-	body := panelStyle.Width(max(44, m.width-2)).Render(m.tunnelDetailView(max(40, m.width-6)))
+	chrome := m.viewTopChrome("wgt tunnel", fallback(m.tunnel.target, "No target selected"), m.tunnelHelpBindings().short)
+	height := m.height
+	if height == 0 {
+		height = 34
+	}
+	body := renderBoundedPanel(m.tunnelDetailView(max(1, m.width-4)), m.width, max(3, height-lipgloss.Height(chrome)-1))
 
 	return strings.Join([]string{
-		m.viewTopChrome("wgt tunnel", fallback(m.tunnel.target, "No target selected"), m.tunnelHelpBindings().short),
+		chrome,
 		body,
 		statusBarStyle.Width(max(0, m.width-2)).Render(m.status),
 	}, "\n")
@@ -263,7 +268,10 @@ func (m Model) browseHelpBindings() helpBindings {
 	rsyncBinding := cloneBinding(m.keys.Rsync, "rsync")
 	copyBinding := cloneBinding(m.keys.Copy, "copy ssh")
 	short := []key.Binding{m.keys.Search, connectBinding, tunnelBinding, rsyncBinding, m.keys.EditConfig, m.keys.Refresh, m.keys.Quit}
-	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding, rsyncBinding}, {m.keys.Refresh, m.keys.EditConfig, copyBinding, m.keys.Help, m.keys.Quit}}
+	full := [][]key.Binding{{m.keys.Up, m.keys.Down, m.keys.PageUp, m.keys.PageDown, m.keys.Search, m.keys.Clear, connectBinding, tunnelBinding, rsyncBinding}, {m.keys.Refresh, m.keys.EditConfig, copyBinding, m.keys.Help, m.keys.Quit}}
+	if m.cfg.UI.DetailsPane != "right" || m.width < 72 {
+		full = append(full, []key.Binding{key.NewBinding(key.WithKeys("alt+up", "alt+down"), key.WithHelp("alt+up/down", "scroll details"))})
+	}
 	return helpBindings{short: short, full: full}
 }
 

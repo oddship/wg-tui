@@ -727,25 +727,18 @@ func (m Model) viewBrowse() string {
 	}
 
 	listHeight, detailHeight := m.browsePaneHeights()
-	renderPanel := func(content string, width, height int) string {
-		lines := strings.Split(content, "\n")
-		lines = lines[:min(len(lines), max(1, height-2))]
-		for i := range lines {
-			lines[i] = truncate(lines[i], max(1, width-4))
-		}
-		return panelStyle.Width(max(1, width-2)).Height(max(1, height-2)).Render(strings.Join(lines, "\n"))
-	}
+
 	var body string
 	if m.cfg.UI.DetailsPane == "right" && m.width >= 72 {
 		leftWidth := m.width * 2 / 3
 		rightWidth := m.width - leftWidth
 		body = lipgloss.JoinHorizontal(lipgloss.Top,
-			renderPanel(m.listView(leftWidth-4), leftWidth, listHeight),
-			renderPanel(m.detailView(rightWidth-4), rightWidth, detailHeight))
+			renderBoundedPanel(m.listView(leftWidth-4), leftWidth, listHeight),
+			renderBoundedPanel(m.detailView(rightWidth-4), rightWidth, detailHeight))
 	} else {
 		body = lipgloss.JoinVertical(lipgloss.Left,
-			renderPanel(m.listView(m.width-4), m.width, listHeight),
-			renderPanel(m.stackedDetailView(m.width-4), m.width, detailHeight))
+			renderBoundedPanel(m.listView(m.width-4), m.width, listHeight),
+			renderBoundedPanel(m.stackedDetailView(m.width-4), m.width, detailHeight))
 	}
 	searchLabel := mutedStyle.Render("Search")
 	if m.searchFocused {
@@ -838,6 +831,17 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 	rows := []string{header}
 	if strings.TrimSpace(summary) != "" {
 		rows = append(rows, mutedStyle.Render(summary))
+	}
+	if m.showHelp && len(bindings) > 0 {
+		full := m.browseHelpBindings().full
+		if m.mode == modeTunnel {
+			full = m.tunnelHelpBindings().full
+		}
+		bindings = nil
+		for _, group := range full {
+			bindings = append(bindings, group...)
+		}
+		rows = append(rows, headerStyle.Render("Keyboard shortcuts"))
 	}
 	if shortcuts := renderShortcutBar(bindings, m.width); shortcuts != "" {
 		rows = append(rows, shortcuts)
