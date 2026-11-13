@@ -19,6 +19,8 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 
 ![wg-tui overview](_static/assets/wgt-overview.gif)
 
+![wg-tui column settings](_static/assets/wgt-target-columns.png)
+
 ![wg-tui tunnel form](_static/assets/wgt-tunnel-form.png)
 
 ![wg-tui transfer form](_static/assets/wgt-transfer-form.png)
@@ -27,7 +29,7 @@ description: Browse Warpgate targets, search locally, reconnect faster with rece
 <article class="card">
 <header><h3>Cache-first</h3></header>
 
-Loads cached targets immediately and refreshes in the background when needed.
+Loads usable cached targets and refreshes stale data in the background when the cache policy allows it.
 </article>
 
 <article class="card">

@@ -362,14 +362,14 @@ The cache strategy MUST be stale-while-revalidate.
 
 Startup behavior MUST be:
 1. load cache immediately if present
-2. render cached targets immediately
+2. discard snapshots beyond `max_age`; show stale snapshots only when `use_stale_on_error` permits it
 3. determine whether cache is stale using TTL
 4. refresh in the background when stale
 5. replace in-memory data after successful refresh
 6. persist fresh data to disk
 
 If refresh fails, the application MUST:
-- continue using cache when allowed by `max_age`
+- continue using stale cache only when allowed by both `max_age` and `use_stale_on_error`
 - indicate stale state in the UI
 
 ### 13.3 Manual refresh
@@ -416,14 +416,19 @@ The main screen MUST include:
 - details pane
 - footer or status line
 
-### 14.3 List content
+The default layout places Targets above Details. The `right` setting places Details beside Targets on terminals at least 72 columns wide. Narrower terminals stack the panes.
 
-Each row SHOULD show compact metadata, such as:
-- target name
-- target kind
-- target group
+### 14.3 Table content
+
+The table MUST retain Name and allow Name, Description, Group, and Kind to be reordered. Optional columns MAY be hidden. The default order is Name, Description, Group, Kind. Widths MUST stay aligned while paging; narrow panes MAY hide trailing columns while retaining Name.
+
+The settings editor MUST offer column visibility and ordering controls with a live preview. Display-only settings MUST save without an API connection.
+
+A refresh MUST preserve the selected target by name. If the target is no longer in the current results, target actions MUST wait for an explicit new selection.
 
 ### 14.4 Details pane content
+
+The bottom pane MUST wrap metadata and allow scrolling through its full contents while keeping the SSH command visible.
 
 The details pane SHOULD show:
 - name
@@ -470,7 +475,7 @@ The config model MUST support keybindings for at least:
 - toggle help
 - quit
 
-Tunnel-page-only controls MAY remain hardcoded in v1, provided help text reflects them accurately.
+Tunnel-page controls, form navigation, and detail scrolling MAY use fixed local keys, provided help text reflects them accurately. Expanded Help MUST show the available browse and tunnel actions, including paging and copying commands.
 The browse action that opens the tunnel form MUST be configurable.
 
 ### 15.4 Validation

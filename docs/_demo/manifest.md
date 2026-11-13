@@ -9,6 +9,8 @@ This directory defines the versioned inputs and expected outputs for the local d
 - Render surface: VHS driving `ttyd` and capturing the xterm.js canvas in Chromium
 - Overview layout: `JetBrains Mono`, `19px`, line height `1.05`, `1600x860`
 - Form layout: `JetBrains Mono`, `17px`, line height `1.05`, `1600x1100`
+- Default browse layout: Targets table above scrollable Details
+- Target-column editor: visibility checkboxes, ordering controls, and live preview
 - Theme: `vhs-theme.json`
 - Intermediates: `${BOSUN_WORKSPACE:-workspace}/scratch/wg-tui-doc-capture/`
 - Final checked-in assets: `docs/_static/assets/`
@@ -23,6 +25,7 @@ This directory defines the versioned inputs and expected outputs for the local d
 - `wgt-search-prod.png`
 - `wgt-onboarding.png`
 - `wgt-config-editor.png`
+- `wgt-target-columns.png`
 - `wgt-tunnel-form.png`
 - `wgt-transfer-form.png`
 - `wgt-tunnel-status.png`
@@ -34,14 +37,14 @@ This directory defines the versioned inputs and expected outputs for the local d
 
 ## Scenario contract
 - Single-screen scenarios are defined once in `internal/ui/doc_capture.go` and exposed by `cmd/wgt-docs --list-scenarios`.
-- Current stills cover browse, search, onboarding, config editor, tunnel form, transfer form, and tunnel status.
+- Current stills cover browse, search, onboarding, config editor, target-column editor, tunnel form, transfer form, and tunnel status.
 - `tour-sequence` is derived from the registry's ordered overview scenes: browse overview -> search results -> tunnel form -> transfer form -> tunnel status.
 
 ## Tape behavior
 - `cmd/wgt-docs --write-vhs-tapes` generates the VHS tapes directly from the scenario registry, so the script does not maintain a second hand-written list.
 - The overview render hides shell setup between scenes so the published animation only shows the TUI states.
 - The same overview tape also captures the browse, search, tunnel, transfer, and tunnel-status PNG stills.
-- A second pass captures onboarding and config-editor PNG stills.
+- A second pass captures onboarding, config-editor, and target-column PNG stills.
 
 If the UI changes, update this manifest first, then regenerate assets with `./scripts/capture-docs.sh`.
 

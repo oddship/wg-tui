@@ -116,6 +116,15 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		BuildModel:  docScenarioConfigEditorModel,
 	},
 	{
+		Name:        "target-columns",
+		WaitPattern: "Target Columns",
+		Screenshot:  "wgt-target-columns.png",
+		Group:       docCaptureVHSForms,
+		ShowSleep:   "450ms",
+		HoldSleep:   "600ms",
+		BuildModel:  docScenarioTargetColumnsModel,
+	},
+	{
 		Name:        "tunnel-form",
 		WaitPattern: "Open Tunnel",
 		Screenshot:  "wgt-tunnel-form.png",
@@ -411,6 +420,17 @@ func docScenarioConfigEditorModel(fixtures DocCaptureFixtures) (Model, error) {
 	}
 	m.formStatus = "edit config and press enter to save"
 	m.setWindowSize(tea.WindowSizeMsg{Width: docCaptureWidth, Height: docCaptureHeight})
+	return m, nil
+}
+
+func docScenarioTargetColumnsModel(fixtures DocCaptureFixtures) (Model, error) {
+	m, err := docScenarioConfigEditorModel(fixtures)
+	if err != nil {
+		return Model{}, err
+	}
+	if err := docFocusFieldByKey(&m, "ui.target_fields"); err != nil {
+		return Model{}, err
+	}
 	return m, nil
 }
 

@@ -33,9 +33,20 @@ The script:
 - keeps `PNG` stills plus `GIF`, `MP4`, and `WebM` variants for the animated overview
 - renders screenshots and recordings through VHS so the published assets come from a real xterm.js terminal surface instead of ANSI-to-SVG conversion
 
+## Validate capture scenarios
+
+To check fixture loading and write ANSI captures without running VHS:
+
+```bash
+WG_TUI_CAPTURE_OUT=/tmp/wgt-doc-captures go test ./internal/ui -run TestDocCaptureScenarios -count=1
+```
+
+This uses the same scenario registry as the screenshots. It includes the default bottom layout and the target-column editor, so fixture or rendering changes can be checked before regenerating media.
+
 ## Notes
 - The product-facing `wgt` CLI stays unchanged. `cmd/wgt-docs` exists only to launch deterministic mocked UI states for docs capture.
 - Scenario names, VHS wait patterns, grouping, screenshot filenames, and the tour sequence all come from the single registry in `internal/ui/doc_capture.go`.
+- The target-columns scenario captures the visibility and ordering controls with their live preview. Browse captures use the default bottom Details layout.
 - Search and similar flows are replayed through real model key handling, not hand-drawn mockups.
 - If the UI changes, update `manifest.md` and the scenario registry together so regenerated assets keep stable names and coverage.
 - This directory is intentionally prefixed with `_` so moat skips it during page generation while keeping the capture inputs versioned next to the docs.

@@ -5,6 +5,7 @@
 - `packages.<system>.default`
 - `apps.<system>.default`
 - `devShells.<system>.default`
+- `devShells.<system>.docs` for the screenshot and animation toolchain
 
 ## Run
 

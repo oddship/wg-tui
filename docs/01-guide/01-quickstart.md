@@ -98,9 +98,15 @@ When you connect, it launches:
 ssh -p <port> -l '<warpgate-username>:<target>' <warpgate-host>
 ```
 
-The details panel shows that SSH command directly, and you can press `c` to copy it.
+Targets appear in a table above Details. Use Up/Down or `j` / `k` to select a target, Page Up/Page Down to move a page, and Enter to connect. Press `/` to search locally. Escape leaves search while keeping the filter; press Escape again to clear it.
 
-Recently used targets rise to the top of the list and show a compact `↺` marker.
+The Details pane shows the selected target and SSH command. Use `alt+up` / `alt+down` to scroll long metadata in the bottom pane, and `c` to copy the full SSH command. Press `?` to expand keyboard help.
+
+Press `e` for settings. Target Columns lets you show, hide, and reorder columns with a live preview. Use `ctrl+s` to save. Display-only changes save offline; connection changes still require API validation.
+
+See the [target browser walkthrough](../target-browser/) for the full flow.
+
+Recently used targets rise to the top of the table and show a compact `↺` marker. Refresh keeps the same target selected by name. If that target disappears, use Up/Down to choose another before connecting, tunnelling, or transferring.
 
 If a normal SSH connect prints a Warpgate approval URL, `wgt` can prompt you to open it locally. You can choose open once, always, or no.
 

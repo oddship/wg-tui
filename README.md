@@ -12,7 +12,8 @@ It is built for the common Warpgate workflow:
 
 ## Features
 
-- TUI-first target picker
+- target table with configurable column visibility and order
+- Targets above a scrollable Details pane by default
 - local fuzzy search over cached targets
 - recent targets rise to the top and show a compact `↺` marker
 - cache-first startup with background refresh
@@ -33,6 +34,10 @@ Animated overview:
 Tunnel form:
 
 ![wg-tui tunnel form](docs/_static/assets/wgt-tunnel-form.png)
+
+Column settings:
+
+![wg-tui column settings](docs/_static/assets/wgt-target-columns.png)
 
 Transfer form:
 
@@ -214,7 +219,9 @@ On Linux, that is usually:
 
 The cache directory also stores recent targets and remembered transfer form state.
 
-Recently used targets rise to the top of the list and show a compact `↺` marker.
+Recently used targets rise to the top of the list and show a compact `↺` marker. A refresh keeps the same target selected by name. If it disappears, choose another target before connecting, tunnelling, or transferring.
+
+See the [target browser walkthrough](docs/01-guide/04-target-browser.md) for display settings and keyboard controls.
 
 ## Configuration
 
@@ -307,8 +314,16 @@ Browse mode:
 - `r` - refresh targets from Warpgate
 - `e` - edit config
 - `c` - copy the SSH command shown in the details panel
-- `?` - toggle help
+- `?` - expand or collapse keyboard help
+- `alt+up` / `alt+down` - scroll the bottom Details pane
 - `q` - quit
+
+Config editor:
+- `tab` / `shift+tab` - move between settings
+- `left` / `right` - change a selected option
+- in Target Columns, use `up` / `down` to select, `space` to show or hide, and `-` / `+` to move a column up or down
+- `ctrl+s` - save from any field
+- `esc` - cancel edits
 
 Tunnel form:
 - type remote and local ports
@@ -355,6 +370,8 @@ Search mode:
 go test ./...
 go build ./...
 ```
+
+Regenerate the README screenshots and overview animation with `./scripts/capture-docs.sh`. See the [capture pipeline guide](docs/01-guide/03-docs-capture-pipeline.md) for fixtures, required tools, and scenario validation.
 
 ## Status
 
