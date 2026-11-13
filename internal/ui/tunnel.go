@@ -52,20 +52,22 @@ func (m *Model) initTunnelBindings() {
 }
 
 func (m *Model) startTunnelFormForSelection() {
-	if len(m.filtered) == 0 {
+	selected, ok := m.selectedTarget()
+	if !ok {
 		m.status = "no target selected"
 		return
 	}
-	m.startTunnelForm(m.filtered[m.selected].Name)
+	m.startTunnelForm(selected.Name)
 }
 
 func (m Model) startRsyncFormForSelection() (tea.Model, tea.Cmd) {
-	if len(m.filtered) == 0 {
+	selected, ok := m.selectedTarget()
+	if !ok {
 		m.status = "no target selected"
 		return m, nil
 	}
 	m.blurSearch()
-	m.startRsyncForm(m.filtered[m.selected].Name)
+	m.startRsyncForm(selected.Name)
 	return m, nil
 }
 

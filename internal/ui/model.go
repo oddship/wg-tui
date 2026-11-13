@@ -240,6 +240,9 @@ func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
 
 	m.applySnapshot(msg.snapshot)
 	m.status = msg.status
+	if _, ok := m.selectedTarget(); !ok && len(m.filtered) > 0 {
+		m.status = joinStatus(m.status, "selected target unavailable; choose another target")
+	}
 	return m, nil
 }
 
@@ -369,6 +372,9 @@ func (m Model) updateSearchInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.searchBox, cmd = m.searchBox.Update(msg)
 	m.applyFilter()
+	if m.selected < 0 && len(m.filtered) > 0 {
+		m.selected = 0
+	}
 	return m, cmd
 }
 
@@ -473,8 +479,23 @@ func (m *Model) applySnapshot(snap cache.Snapshot) {
 }
 
 func (m *Model) setTargets(targets []api.Target) {
+	previous, hadSelection := m.selectedTarget()
+	requireSelection := m.selected < 0
 	m.targets = targets
 	m.rebuildTargetIndex()
+	if hadSelection {
+		m.selected = -1
+		m.selectTargetByName(previous.Name)
+	} else if requireSelection {
+		m.selected = -1
+	}
+}
+
+func (m Model) selectedTarget() (api.Target, bool) {
+	if m.selected < 0 || m.selected >= len(m.filtered) {
+		return api.Target{}, false
+	}
+	return m.filtered[m.selected], true
 }
 
 func (m *Model) applyFilter() {
@@ -487,7 +508,7 @@ func (m *Model) applyFilter() {
 
 func (m *Model) moveSelection(delta int) {
 	if len(m.filtered) == 0 {
-		m.selected = 0
+		m.selected = -1
 		return
 	}
 	m.selected = clamp(m.selected+delta, 0, len(m.filtered)-1)
@@ -549,19 +570,23 @@ func (m *Model) openConfigEditor() {
 }
 
 func (m Model) connectSelected() (tea.Model, tea.Cmd) {
-	if len(m.filtered) == 0 {
+	selected, ok := m.selectedTarget()
+	if !ok {
+		m.status = "choose a target before connecting"
 		return m, nil
 	}
-	target := m.filtered[m.selected].Name
+	target := selected.Name
 	m.recordTargetUse(target)
 	return m, sshpkg.ExecCmd(m.cfgPath, m.cfg, target)
 }
 
 func (m *Model) copySelectedCommand() {
-	if len(m.filtered) == 0 {
+	selected, ok := m.selectedTarget()
+	if !ok {
+		m.status = "no target selected"
 		return
 	}
-	bin, args := sshpkg.ShellCommand(m.cfg, m.filtered[m.selected].Name)
+	bin, args := sshpkg.ShellCommand(m.cfg, selected.Name)
 	if err := clipboard.WriteAll(commandText(bin, args)); err != nil {
 		m.status = err.Error()
 		return
@@ -762,12 +787,12 @@ func (m Model) listView(width int) string {
 
 func (m Model) detailView(width int) string {
 	rows := []string{headerStyle.Render("Details")}
-	if len(m.filtered) == 0 {
-		rows = append(rows, mutedStyle.Render("No target selected."))
+	t, ok := m.selectedTarget()
+	if !ok {
+		rows = append(rows, mutedStyle.Render("No target selected. Use up/down to choose."))
 		return strings.Join(rows, "\n")
 	}
 
-	t := m.filtered[m.selected]
 	rows = append(rows,
 		titleStyle.Render(t.Name),
 		fmt.Sprintf("kind: %s", fallback(t.Kind, "-")),

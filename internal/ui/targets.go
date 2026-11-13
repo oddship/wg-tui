@@ -160,10 +160,10 @@ func renderTargetTable(targets []api.Target, width, selected int, recent func(st
 
 // stackedDetailRows keeps every metadata value available through scrolling.
 func (m Model) stackedDetailRows(width int) []string {
-	if len(m.filtered) == 0 {
+	t, ok := m.selectedTarget()
+	if !ok {
 		return nil
 	}
-	t := m.filtered[m.selected]
 	values := []string{"Name: " + t.Name, "Kind: " + t.Kind, "Group: " + t.Group.Name}
 	if t.ExternalHost != "" {
 		values = append(values, "Host: "+t.ExternalHost)
@@ -179,8 +179,9 @@ func (m Model) stackedDetailRows(width int) []string {
 
 // The command stays pinned while metadata scrolls inside the bottom pane.
 func (m Model) stackedDetailView(width int) string {
-	if len(m.filtered) == 0 {
-		return headerStyle.Render("Details") + "\nNo target selected."
+	selected, ok := m.selectedTarget()
+	if !ok {
+		return headerStyle.Render("Details") + "\nNo target selected. Use up/down to choose."
 	}
 	_, height := m.browsePaneHeights()
 	available := max(1, height-4)
@@ -193,7 +194,7 @@ func (m Model) stackedDetailView(width int) string {
 	}
 	rows := []string{headerStyle.Render(heading)}
 	rows = append(rows, metadata[offset:end]...)
-	bin, args := sshpkg.ShellCommand(m.cfg, m.filtered[m.selected].Name)
+	bin, args := sshpkg.ShellCommand(m.cfg, selected.Name)
 	rows = append(rows, truncate("SSH: "+commandText(bin, args), width))
 	return strings.Join(rows, "\n")
 }

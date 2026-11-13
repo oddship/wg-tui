@@ -101,6 +101,7 @@ func TestBottomDetailsCanScrollThroughFullMetadata(t *testing.T) {
 	target := makeRenderTarget("host", strings.Repeat("group-", 20), strings.Repeat("description words ", 40)+"FINAL-METADATA")
 	target.ExternalHost = strings.Repeat("external-", 20)
 	m.setTargets([]api.Target{target})
+	m.moveSelection(0)
 	for i := 0; i < 200; i++ {
 		view := m.View()
 		if lipgloss.Height(view) > 24 || lipgloss.Width(view) > 80 {
