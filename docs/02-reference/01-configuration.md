@@ -100,6 +100,10 @@ keys::
     - "ctrl+c"
 ```
 
+## Cache policy
+
+`cache.ttl` determines when targets become stale. Snapshots older than `cache.max_age` are discarded. With `cache.use_stale_on_error: true`, usable stale targets remain available while refreshing and after an API failure. Set it to `false` to hide stale targets until a refresh succeeds. Fresh cached targets remain available in either mode.
+
 ## Approval settings
 
 `ui.approval_open_mode` controls what happens when a normal SSH connect prints a Warpgate approval URL:

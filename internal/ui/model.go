@@ -221,10 +221,14 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	m.applyConfig(msg.cfg)
 	m.applyState(msg.state)
 	m.snapshot = msg.snapshot
-	m.setTargets(msg.snapshot.Targets)
 	m.status = msg.status
+	if reason := cacheRejectionReason(m.cfg, m.snapshot); reason != "" {
+		m.snapshot = cache.Snapshot{}
+		m.status = reason
+	}
+	m.setTargets(m.snapshot.Targets)
 
-	if msg.snapshot.FetchedAt.IsZero() || cache.IsStale(msg.snapshot, m.cfg.Cache.TTL) {
+	if m.snapshot.FetchedAt.IsZero() || cache.IsStale(m.snapshot, m.cfg.Cache.TTL) {
 		m.status = joinStatus(m.status, "refreshing in background...")
 		return m, refreshCmd(m.client)
 	}
@@ -235,6 +239,11 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.status = msg.err.Error()
+		if reason := cacheRejectionReason(m.cfg, m.snapshot); reason != "" {
+			m.snapshot = cache.Snapshot{}
+			m.setTargets(nil)
+			m.status = joinStatus(m.status, reason)
+		}
 		return m, nil
 	}
 

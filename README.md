@@ -347,7 +347,7 @@ Search mode:
 - Tunnel startup may briefly hand terminal control to `ssh` for approval or login, then return to the TUI once the tunnel is backgrounded.
 - Transfer execution may also briefly hand terminal control to SSH-backed authentication or approval flows.
 - On Linux, clipboard support may require `xclip` or `xsel` depending on your environment.
-- `wgt` is cache-first. If cache exists, it starts quickly and refreshes in the background when stale.
+- `wgt` is cache-first. It uses snapshots within `cache.max_age` and refreshes stale data in the background. Set `cache.use_stale_on_error` to `false` to hide stale targets until a refresh succeeds.
 
 ## Development
 
