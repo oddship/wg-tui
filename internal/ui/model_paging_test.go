@@ -51,6 +51,7 @@ func TestPageDownMovesSelectionByVisibleRows(t *testing.T) {
 
 func TestPageKeysClampAtListBounds(t *testing.T) {
 	m := newPagingModel(t, 4)
+	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 40})
 
 	m = pressKey(t, m, tea.KeyMsg{Type: tea.KeyPgDown})
 	if m.selected != 3 {

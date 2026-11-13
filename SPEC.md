@@ -179,12 +179,12 @@ The config model MUST support at least:
 ```huml
 %HUML v0.2.0
 
-server:
+server::
   url: "https://warpgate.example.com"
   token: "<warpgate-api-token>"
   insecure_skip_tls_verify: false
 
-ssh:
+ssh::
   username: "user@example.com"
   host: "warpgate.example.com"
   port: 2222
@@ -193,17 +193,19 @@ ssh:
     - "-o"
     - "ServerAliveInterval=30"
 
-cache:
+cache::
   dir: "~/.cache/wgt"
   ttl: "10m"
   max_age: "168h"
   use_stale_on_error: true
 
-ui:
-  details_pane: "right"
+ui::
+  details_pane: "bottom"
   preview_lines: 8
+  target_fields: "description, group, kind"
+  target_contrast: "normal"
 
-keys:
+keys::
   up::
     - "up"
     - "k"

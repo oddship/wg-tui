@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -41,6 +42,7 @@ type Model struct {
 
 	searchBox     textinput.Model
 	searchFocused bool
+	detailScroll  int
 	help          help.Model
 	mode          mode
 	status        string
@@ -78,6 +80,8 @@ type Model struct {
 }
 
 type formField struct {
+	columns     []targetColumnChoice
+	columnIndex int
 	key         string
 	label       string
 	input       textinput.Model
@@ -101,10 +105,11 @@ type refreshMsg struct {
 }
 
 type configSavedMsg struct {
-	cfg      cfgpkg.Config
-	snapshot cache.Snapshot
-	status   string
-	err      error
+	localOnly bool
+	cfg       cfgpkg.Config
+	snapshot  cache.Snapshot
+	status    string
+	err       error
 }
 
 const (
@@ -246,7 +251,9 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.applyConfig(msg.cfg)
-	m.applySnapshot(msg.snapshot)
+	if !msg.localOnly {
+		m.applySnapshot(msg.snapshot)
+	}
 	m.status = msg.status
 	m.mode = modeBrowse
 	m.formStatus = ""
@@ -275,6 +282,18 @@ func (m Model) handleRsyncFinished(msg rsyncFinishedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "alt+up" || msg.String() == "alt+down" {
+		if m.cfg.UI.DetailsPane != "right" || m.width < 72 {
+			delta := 1
+			if msg.String() == "alt+up" {
+				delta = -1
+			}
+			_, height := m.browsePaneHeights()
+			m.detailScroll = clamp(m.detailScroll+delta, 0, max(0, len(m.stackedDetailRows(max(1, m.width-4)))-max(1, height-4)))
+			return m, nil
+		}
+	}
+
 	if m.searchFocused {
 		return m.updateBrowseWhileSearching(msg)
 	}
@@ -460,6 +479,7 @@ func (m *Model) setTargets(targets []api.Target) {
 
 func (m *Model) applyFilter() {
 	m.filtered = m.index.Filter(m.searchBox.Value())
+	m.detailScroll = 0
 	if m.selected >= len(m.filtered) {
 		m.selected = max(0, len(m.filtered)-1)
 	}
@@ -471,11 +491,13 @@ func (m *Model) moveSelection(delta int) {
 		return
 	}
 	m.selected = clamp(m.selected+delta, 0, len(m.filtered)-1)
+	m.detailScroll = 0
 }
 
 // visibleRows returns the list pane's row capacity, also the page up/down distance.
 func (m Model) visibleRows() int {
-	return max(5, m.height-10)
+	listHeight, _ := m.browsePaneHeights()
+	return max(1, listHeight-5)
 }
 
 func (m *Model) toggleHelp() {
@@ -603,6 +625,21 @@ func refreshCmd(client *api.Client) tea.Cmd {
 	}
 }
 
+// Local preferences do not require a working API connection.
+func (m Model) saveConfigCmd(cfg cfgpkg.Config) tea.Cmd {
+	previous := m.cfg
+	_ = deriveSSHHost(&previous)
+	if m.mode == modeConfig && reflect.DeepEqual(previous.Server, cfg.Server) && reflect.DeepEqual(previous.SSH, cfg.SSH) {
+		return func() tea.Msg {
+			if err := cfgpkg.Save(m.cfgPath, cfg); err != nil {
+				return configSavedMsg{err: err}
+			}
+			return configSavedMsg{cfg: cfg, localOnly: true, status: "config saved"}
+		}
+	}
+	return validateAndSaveCmd(m.cfgPath, cfg)
+}
+
 func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config) tea.Cmd {
 	return func() tea.Msg {
 		client := api.New(cfg)
@@ -644,7 +681,7 @@ func (m Model) View() string {
 
 var (
 	titleStyle        = lipgloss.NewStyle().Bold(true)
-	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	mutedStyle        = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "250"})
 	selectedStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
 	panelStyle        = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
 	headerStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
@@ -664,15 +701,31 @@ func (m Model) viewBrowse() string {
 		m.width = 100
 	}
 
-	leftWidth := max(36, m.width/2-2)
-	rightWidth := max(28, m.width-leftWidth-4)
-	list := panelStyle.Width(leftWidth).Render(m.listView(leftWidth - 4))
-	detail := panelStyle.Width(rightWidth).Render(m.detailView(rightWidth - 4))
+	listHeight, detailHeight := m.browsePaneHeights()
+	renderPanel := func(content string, width, height int) string {
+		lines := strings.Split(content, "\n")
+		lines = lines[:min(len(lines), max(1, height-2))]
+		for i := range lines {
+			lines[i] = truncate(lines[i], max(1, width-4))
+		}
+		return panelStyle.Width(max(1, width-2)).Height(max(1, height-2)).Render(strings.Join(lines, "\n"))
+	}
+	var body string
+	if m.cfg.UI.DetailsPane == "right" && m.width >= 72 {
+		leftWidth := m.width * 2 / 3
+		rightWidth := m.width - leftWidth
+		body = lipgloss.JoinHorizontal(lipgloss.Top,
+			renderPanel(m.listView(leftWidth-4), leftWidth, listHeight),
+			renderPanel(m.detailView(rightWidth-4), rightWidth, detailHeight))
+	} else {
+		body = lipgloss.JoinVertical(lipgloss.Left,
+			renderPanel(m.listView(m.width-4), m.width, listHeight),
+			renderPanel(m.stackedDetailView(m.width-4), m.width, detailHeight))
+	}
 	searchLabel := mutedStyle.Render("Search")
 	if m.searchFocused {
 		searchLabel = searchFocusStyle.Render("Search")
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, list, detail)
 
 	return strings.Join([]string{
 		m.viewTopChrome("wgt", m.browseTitleText(), m.browseHelpBindings().short),
@@ -697,13 +750,13 @@ func (m Model) listView(width int) string {
 	}
 	end := min(len(m.filtered), start+available)
 
-	for i := start; i < end; i++ {
-		rows = append(rows, renderTargetListLineWithRecent(m.filtered[i], width, i == m.selected, m.isRecentTarget(m.filtered[i].Name)))
+	table := renderTargetTable(m.filtered, width, m.selected, m.isRecentTarget, m.cfg.UI)
+	rows = append(rows, table[0])
+	rows = append(rows, table[start+1:end+1]...)
+	if start > 0 || end < len(m.filtered) {
+		rows = append(rows, mutedStyle.Render(fmt.Sprintf("showing %d-%d of %d", start+1, end, len(m.filtered))))
 	}
 
-	if start > 0 || end < len(m.filtered) {
-		rows = append(rows, "", mutedStyle.Render(fmt.Sprintf("showing %d-%d of %d", start+1, end, len(m.filtered))))
-	}
 	return strings.Join(rows, "\n")
 }
 
@@ -845,7 +898,7 @@ func renderShortcutBar(bindings []key.Binding, width int) string {
 		lines = append(lines, current)
 	}
 
-	return actionsBarStyle.Width(availableWidth).Render(strings.Join(lines, "\n"))
+	return actionsBarStyle.Width(availableWidth + 2).Render(strings.Join(lines, "\n"))
 }
 
 func joinStatus(parts ...string) string {
@@ -882,47 +935,6 @@ func (m Model) isRecentTarget(name string) bool {
 		}
 	}
 	return false
-}
-
-func renderTargetListLine(t api.Target, width int, selected bool) string {
-	return renderTargetListLineWithRecent(t, width, selected, false)
-}
-
-func renderTargetListLineWithRecent(t api.Target, width int, selected, recent bool) string {
-	prefix := "  "
-	prefixRendered := prefix
-	main := fmt.Sprintf("%s [%s] %s", t.Name, t.Kind, t.Group.Name)
-	available := max(0, width-lipgloss.Width(prefix))
-	secondaryParts := make([]string, 0, 2)
-	if recent {
-		secondaryParts = append(secondaryParts, recentTargetMarker)
-	}
-	if description := strings.TrimSpace(t.Description); description != "" {
-		secondaryParts = append(secondaryParts, description)
-	}
-	secondary := strings.Join(secondaryParts, " ")
-
-	if secondary != "" {
-		mainWidth := lipgloss.Width(main)
-		switch {
-		case mainWidth >= available:
-			main = truncate(main, available)
-			secondary = ""
-		case mainWidth+1+lipgloss.Width(secondary) > available:
-			secondary = truncate(secondary, max(0, available-mainWidth-1))
-		}
-	} else {
-		main = truncate(main, available)
-	}
-
-	if selected {
-		prefixRendered = selectedStyle.Render("• ")
-		main = selectedStyle.Render(main)
-	}
-	if secondary != "" {
-		return prefixRendered + main + " " + mutedStyle.Render(secondary)
-	}
-	return prefixRendered + main
 }
 
 func truncate(s string, width int) string {

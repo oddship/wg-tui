@@ -68,6 +68,8 @@ func (cfg Config) toMap() map[string]any {
 			"use_stale_on_error": cfg.Cache.UseStaleOnError,
 		},
 		"ui": map[string]any{
+			"target_fields":         cfg.UI.TargetFields,
+			"target_contrast":       cfg.UI.TargetContrast,
 			"details_pane":          cfg.UI.DetailsPane,
 			"preview_lines":         cfg.UI.PreviewLines,
 			"approval_open_mode":    cfg.UI.ApprovalOpenMode,
@@ -112,6 +114,12 @@ func applyDerived(cfg *Config) {
 	}
 	if cfg.Cache.MaxAge == 0 {
 		cfg.Cache.MaxAge = def.Cache.MaxAge
+	}
+	if cfg.UI.TargetFields == "" {
+		cfg.UI.TargetFields = def.UI.TargetFields
+	}
+	if cfg.UI.TargetContrast == "" {
+		cfg.UI.TargetContrast = def.UI.TargetContrast
 	}
 	if cfg.UI.DetailsPane == "" {
 		cfg.UI.DetailsPane = def.UI.DetailsPane

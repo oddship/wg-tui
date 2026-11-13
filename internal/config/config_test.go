@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 	"testing"
 )
 
@@ -66,5 +67,49 @@ func stubPathResolvers(t *testing.T) func() {
 		userConfigDirFn = prevConfigDir
 		userCacheDirFn = prevCacheDir
 		userHomeDirFn = prevHomeDir
+	}
+}
+
+func TestTargetDisplayRoundTrip(t *testing.T) {
+	cfg := Default()
+	cfg.UI.TargetFields = "kind, description"
+	cfg.UI.TargetContrast = "subtle"
+	path := t.TempDir() + "/config.huml"
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UI.TargetFields != cfg.UI.TargetFields || loaded.UI.TargetContrast != cfg.UI.TargetContrast {
+		t.Fatalf("display settings lost: %+v", loaded.UI)
+	}
+}
+
+func TestTargetDisplayValidation(t *testing.T) {
+	for _, fields := range []string{"description,group", "none", "", "kind"} {
+		if err := ValidateTargetDisplay(UIConfig{TargetFields: fields, TargetContrast: "normal"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, ui := range []UIConfig{{TargetFields: "unknown"}, {TargetFields: "group,group"}, {TargetFields: "none,kind"}, {TargetContrast: "dim"}} {
+		if err := ValidateTargetDisplay(ui); err == nil {
+			t.Fatalf("accepted invalid settings: %+v", ui)
+		}
+	}
+}
+
+func TestLegacyConfigUsesTargetDisplayDefaults(t *testing.T) {
+	path := t.TempDir() + "/config.huml"
+	if err := os.WriteFile(path, []byte("%HUML v0.2.0\nui::\n  details_pane: \"right\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UI.TargetFields != Default().UI.TargetFields || cfg.UI.TargetContrast != "normal" {
+		t.Fatalf("missing defaults: %+v", cfg.UI)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/oddship/wg-tui/internal/api"
 	cfgpkg "github.com/oddship/wg-tui/internal/config"
 )
@@ -122,34 +123,6 @@ func TestBrowseViewShowsConfigShortcutEvenWhenShortcutsWrap(t *testing.T) {
 	}
 }
 
-func TestRenderTargetListLineShowsDescriptionAsSecondaryText(t *testing.T) {
-	target := makeRenderTarget("host-01", "alpha", "zone-a1")
-
-	line := ansiPattern.ReplaceAllString(renderTargetListLine(target, 80, false), "")
-	if !strings.Contains(line, "host-01 [Ssh] alpha zone-a1") {
-		t.Fatalf("expected list row to include description, got %q", line)
-	}
-}
-
-func TestRenderTargetListLineTrimsDescriptionToAvailableWidth(t *testing.T) {
-	target := makeRenderTarget("host-01", "alpha", "zone-a1-extra-long")
-
-	width := 28
-	line := ansiPattern.ReplaceAllString(renderTargetListLine(target, width, false), "")
-	if len([]rune(line)) > width {
-		t.Fatalf("expected rendered list row to fit width %d, got %q", width, line)
-	}
-}
-
-func TestRenderTargetListLineShowsRecentIndicator(t *testing.T) {
-	target := makeRenderTarget("host-01", "alpha", "")
-
-	line := ansiPattern.ReplaceAllString(renderTargetListLineWithRecent(target, 80, false, true), "")
-	if !strings.Contains(line, recentTargetMarker) {
-		t.Fatalf("expected recent indicator in list row, got %q", line)
-	}
-}
-
 func TestBrowseListShowsRecentIndicatorForRecentTarget(t *testing.T) {
 	m := New("test")
 	m.mode = modeBrowse
@@ -161,7 +134,7 @@ func TestBrowseListShowsRecentIndicatorForRecentTarget(t *testing.T) {
 	m.setWindowSize(tea.WindowSizeMsg{Width: 80, Height: 20})
 
 	view := ansiPattern.ReplaceAllString(m.View(), "")
-	if !strings.Contains(view, "prod-api [Ssh] alpha "+recentTargetMarker) {
+	if !strings.Contains(view, "prod-api "+recentTargetMarker) {
 		t.Fatalf("expected recent indicator in browse list, got %q", view)
 	}
 }
@@ -319,4 +292,21 @@ func countExactLines(view, want string) int {
 		}
 	}
 	return count
+}
+
+func TestTargetSettingsPreviewStaysVisible(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.mode = modeConfig
+	m.startForm(true)
+	m.setWindowSize(tea.WindowSizeMsg{Width: 100, Height: 24})
+	m.focusField(requireFieldIndex(t, m.fields, "ui.target_fields"))
+	requireField(t, m.fields, "ui.target_fields").input.SetValue("none")
+	view := ansiPattern.ReplaceAllString(m.View(), "")
+	if !strings.Contains(view, "Target list preview") || !strings.Contains(view, "prod-api ↺") || !strings.Contains(view, "Target Columns") {
+		t.Fatalf("missing preview or focused field: %q", view)
+	}
+	if lipgloss.Height(view) > 24 {
+		t.Fatalf("settings overflow terminal: %d", lipgloss.Height(view))
+	}
 }

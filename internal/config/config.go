@@ -56,6 +56,8 @@ const (
 )
 
 type UIConfig struct {
+	TargetFields        string `koanf:"target_fields"`
+	TargetContrast      string `koanf:"target_contrast"`
 	DetailsPane         string `koanf:"details_pane"`
 	PreviewLines        int    `koanf:"preview_lines"`
 	ApprovalOpenMode    string `koanf:"approval_open_mode"`
@@ -93,7 +95,9 @@ func Default() Config {
 			UseStaleOnError: true,
 		},
 		UI: UIConfig{
-			DetailsPane:         "right",
+			TargetFields:        "description, group, kind",
+			TargetContrast:      "normal",
+			DetailsPane:         "bottom",
 			PreviewLines:        8,
 			ApprovalOpenMode:    ApprovalOpenModeAsk,
 			ApprovalOpenCommand: DefaultApprovalOpenCommand,

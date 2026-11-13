@@ -222,6 +222,8 @@ Recently used targets rise to the top of the list and show a compact `↺` marke
 
 You only need to set `cache.dir` if you want to override the platform default.
 
+Press `e` to edit display settings. Targets appear above Details by default. Use the column editor to show, hide, and reorder columns, with a live preview. Display-only changes can be saved offline. In the bottom Details pane, `alt+up` / `alt+down` scroll through full metadata while the SSH command stays visible.
+
 `ui.approval_open_command` must include `%s`, which `wgt` replaces with the approval URL.
 
 Example:
@@ -229,12 +231,12 @@ Example:
 ```huml
 %HUML v0.2.0
 
-server:
+server::
   url: "https://warpgate.example.com"
   token: "<warpgate-api-token>"
   insecure_skip_tls_verify: false
 
-ssh:
+ssh::
   username: "user@example.com"
   host: "warpgate.example.com"
   port: 2222
@@ -243,19 +245,21 @@ ssh:
     - "-o"
     - "ServerAliveInterval=30"
 
-cache:
+cache::
   dir: "/path/to/cache/wgt"
   ttl: "10m"
   max_age: "168h"
   use_stale_on_error: true
 
-ui:
-  details_pane: "right"
+ui::
+  details_pane: "bottom"
   preview_lines: 8
+  target_fields: "description, group, kind"
+  target_contrast: "normal"
   approval_open_mode: "ask"
   approval_open_command: "xdg-open %s"
 
-keys:
+keys::
   up::
     - "up"
     - "k"

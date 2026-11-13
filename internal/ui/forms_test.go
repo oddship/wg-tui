@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -365,4 +366,34 @@ func requireFieldIndex(t *testing.T, fields []formField, key string) int {
 	}
 	t.Fatalf("missing form field %q", key)
 	return -1
+}
+
+func TestTargetSettingsSaveAndValidate(t *testing.T) {
+	m := New("test")
+	m.cfg = cfgpkg.Default()
+	m.cfg.Server.URL = "https://warpgate.example.com"
+	m.cfg.Server.Token = "token"
+	m.cfg.SSH.Username = "user@example.com"
+	m.mode = modeConfig
+	m.startForm(true)
+	requireField(t, m.fields, "ui.details_pane").input.SetValue("right")
+	requireField(t, m.fields, "ui.target_fields").input.SetValue("kind, description")
+	requireField(t, m.fields, "ui.target_contrast").input.SetValue("subtle")
+	cfg, err := m.formConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.UI.TargetFields != "kind, description" || cfg.UI.TargetContrast != "subtle" || cfg.UI.DetailsPane != "right" {
+		t.Fatalf("settings lost: %+v", cfg.UI)
+	}
+	m.focusField(requireFieldIndex(t, m.fields, "ui.target_contrast"))
+	_, cmd := m.updateConfigForm(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if cmd == nil {
+		t.Fatal("Ctrl+S should save from a select field")
+	}
+	requireField(t, m.fields, "ui.target_fields").input.SetValue("invalid")
+	updated, cmd := m.updateConfigForm(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if cmd != nil || !strings.Contains(updated.(Model).formStatus, "target_fields") {
+		t.Fatal("invalid display settings should prevent save")
+	}
 }

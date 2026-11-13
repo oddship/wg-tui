@@ -6,6 +6,9 @@ import (
 )
 
 func validate(cfg Config) error {
+	if err := ValidateTargetDisplay(cfg.UI); err != nil {
+		return err
+	}
 	if err := validateApprovalOpenMode(cfg.UI.ApprovalOpenMode); err != nil {
 		return err
 	}
@@ -76,4 +79,31 @@ func validateApprovalOpenCommand(mode, command string) error {
 
 func normalizeKey(key string) string {
 	return strings.ToLower(strings.TrimSpace(key))
+}
+
+// ValidateTargetDisplay checks the editable target list settings.
+func ValidateTargetDisplay(ui UIConfig) error {
+	if ui.DetailsPane != "" && ui.DetailsPane != "bottom" && ui.DetailsPane != "right" {
+		return fmt.Errorf("details_pane must be bottom or right")
+	}
+	if ui.TargetContrast != "" && ui.TargetContrast != "normal" && ui.TargetContrast != "subtle" {
+		return fmt.Errorf("target_contrast must be normal or subtle")
+	}
+	if strings.TrimSpace(ui.TargetFields) == "" || ui.TargetFields == "none" {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(ui.TargetFields, ",") {
+		field := strings.TrimSpace(raw)
+		switch field {
+		case "name", "description", "group", "kind":
+		default:
+			return fmt.Errorf("target_fields: use name, description, group, kind, or none")
+		}
+		if seen[field] {
+			return fmt.Errorf("target_fields: duplicate field %q", field)
+		}
+		seen[field] = true
+	}
+	return nil
 }

@@ -36,12 +36,12 @@ You only need to set `cache.dir` if you want to override the platform default.
 ```huml
 %HUML v0.2.0
 
-server:
+server::
   url: "https://warpgate.example.com"
   token: "<warpgate-api-token>"
   insecure_skip_tls_verify: false
 
-ssh:
+ssh::
   username: "user@example.com"
   host: "warpgate.example.com"
   port: 2222
@@ -50,19 +50,21 @@ ssh:
     - "-o"
     - "ServerAliveInterval=30"
 
-cache:
+cache::
   dir: "/path/to/cache/wgt"
   ttl: "10m"
   max_age: "168h"
   use_stale_on_error: true
 
-ui:
-  details_pane: "right"
+ui::
+  details_pane: "bottom"
   preview_lines: 8
+  target_fields: "description, group, kind"
+  target_contrast: "normal"
   approval_open_mode: "ask"
   approval_open_command: "xdg-open %s"
 
-keys:
+keys::
   up::
     - "up"
     - "k"
@@ -113,3 +115,17 @@ Examples:
 - `xdg-open %s`
 - `open %s`
 - `firefox %s`
+
+## Target list display
+
+Press `e` to edit settings. Details Position defaults to `bottom`, with Targets above Details. Choose `right` for side-by-side panes. Narrow terminals stack the panes in either mode.
+
+Targets appear in a table. In Target Columns, use Up/Down to select a column, Space to show or hide it, and `-` / `+` to move it up or down. Name always stays enabled. Tab moves to the next setting.
+
+In the config file, `ui.target_fields` controls the column order: `name`, `description`, `group`, and `kind`. The default is `description, group, kind`, with Name added first. Include `name` explicitly to move it elsewhere, for example `kind, name, group, description`. Use `none` for Name only. Name is always included.
+
+Missing values appear as `-`. Long cells end with `…`. Column widths stay consistent while paging through results. When the pane is too narrow, trailing columns are hidden, with Name always retained. The selected target's details appear in the Details pane. In the bottom pane, use `alt+up` / `alt+down` to scroll through wrapped metadata and descriptions. The SSH command stays visible while scrolling. Recently used names have a `↺` marker.
+
+Target Metadata Brightness defaults to `normal`, which uses the terminal's text color. Choose `subtle` for secondary text that adapts to light and dark backgrounds. Selected rows use the selection color throughout.
+
+A sample table previews changes while you edit the column order or brightness. Press `Ctrl+S` to validate and save. Display-only changes save locally without contacting Warpgate. Changes to connection settings still require API validation. Invalid column names and duplicates show an error before saving. Config files without display settings use these defaults. An existing `details_pane: "right"` setting keeps the side-by-side layout.

@@ -228,7 +228,7 @@ func LoadDocCaptureFixtures() (DocCaptureFixtures, error) {
 	if err != nil {
 		return DocCaptureFixtures{}, err
 	}
-	fixtureDir := filepath.Join(repoRoot, "docs", "demo", "fixtures")
+	fixtureDir := filepath.Join(repoRoot, "docs", "_demo", "fixtures")
 
 	cfg, err := cfgpkg.Load(filepath.Join(fixtureDir, "config.huml"))
 	if err != nil {
@@ -316,7 +316,7 @@ func loadDocCaptureThemeJSON() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(filepath.Join(repoRoot, "docs", "demo", "vhs-theme.json"))
+	b, err := os.ReadFile(filepath.Join(repoRoot, "docs", "_demo", "vhs-theme.json"))
 	if err != nil {
 		return "", fmt.Errorf("read docs theme: %w", err)
 	}

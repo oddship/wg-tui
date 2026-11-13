@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/oddship/wg-tui/internal/api"
 	cfgpkg "github.com/oddship/wg-tui/internal/config"
 	sshpkg "github.com/oddship/wg-tui/internal/ssh"
 )
@@ -31,6 +32,13 @@ func (m *Model) startForm(edit bool) {
 		newField("ssh.port", "SSH Port", portString(cfg.SSH.Port), "Optional override. Usually auto-detected from /info"),
 		newSelectField("ui.approval_open_mode", "Open Approval Link", []string{cfgpkg.ApprovalOpenModeAsk, cfgpkg.ApprovalOpenModeAlways, cfgpkg.ApprovalOpenModeNever}, cfg.UI.ApprovalOpenMode, "ask prompts each time - always opens automatically - never stays manual"),
 		newField("ui.approval_open_command", "Browser Open Command", cfg.UI.ApprovalOpenCommand, "Use %s for the approval URL, for example xdg-open %s or firefox %s"),
+	}
+	if edit {
+		m.fields = append(m.fields,
+			newSelectField("ui.details_pane", "Details Position", []string{"bottom", "right"}, cfg.UI.DetailsPane, "bottom stacks Targets above Details; right places Details beside Targets"),
+			newTargetColumnsField(cfg.UI.TargetFields),
+			newSelectField("ui.target_contrast", "Target Metadata Brightness", []string{"normal", "subtle"}, cfg.UI.TargetContrast, "normal uses terminal text color; subtle uses a readable secondary color"),
+		)
 	}
 	m.formIndex = 0
 	m.formStatus = ""
@@ -152,6 +160,20 @@ func newTextInput(value string) textinput.Model {
 
 func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	current := m.currentField()
+	if len(current.columns) > 0 {
+		switch msg.String() {
+		case "up", "down", " ", "space", "+", "=", "-":
+			m.fields[m.formIndex].updateTargetColumns(msg.String())
+			return m, nil
+		case "enter":
+			m.focusField((m.formIndex + 1) % len(m.fields))
+			return m, nil
+		case "tab", "shift+tab", "esc", "ctrl+s":
+			// Use the normal form navigation and save paths below.
+		default:
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "esc":
 		if m.mode == modeConfig {
@@ -176,8 +198,8 @@ func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.shiftFieldOption(m.formIndex, 1)
 			return m, nil
 		}
-	case "enter":
-		if current.isSelect() {
+	case "enter", "ctrl+s":
+		if msg.String() == "enter" && current.isSelect() {
 			m.focusField((m.formIndex + 1) % len(m.fields))
 			return m, nil
 		}
@@ -186,8 +208,8 @@ func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.formStatus = err.Error()
 			return m, nil
 		}
-		m.formStatus = "validating config and loading targets..."
-		return m, validateAndSaveCmd(m.cfgPath, cfg)
+		m.formStatus = "saving config..."
+		return m, m.saveConfigCmd(cfg)
 	}
 
 	var cmd tea.Cmd
@@ -314,7 +336,7 @@ func (m *Model) syncTunnelFormFields(index int, before, after string) {
 
 func (m *Model) focusField(idx int) {
 	for i := range m.fields {
-		if i == idx && !m.fields[i].isSelect() {
+		if i == idx && !m.fields[i].isSelect() && len(m.fields[i].columns) == 0 {
 			m.fields[i].input.Focus()
 		} else {
 			m.fields[i].input.Blur()
@@ -502,11 +524,20 @@ func (m Model) formConfig() (cfgpkg.Config, error) {
 			cfg.SSH.Port = port
 		case "ui.approval_open_mode":
 			cfg.UI.ApprovalOpenMode = strings.ToLower(value)
+		case "ui.details_pane":
+			cfg.UI.DetailsPane = value
+		case "ui.target_fields":
+			cfg.UI.TargetFields = value
+		case "ui.target_contrast":
+			cfg.UI.TargetContrast = value
 		case "ui.approval_open_command":
 			cfg.UI.ApprovalOpenCommand = value
 		}
 	}
 
+	if err := cfgpkg.ValidateTargetDisplay(cfg.UI); err != nil {
+		return cfg, err
+	}
 	if err := validateRequired(cfg); err != nil {
 		return cfg, err
 	}
@@ -733,7 +764,7 @@ func rsyncCmd(cfg cfgpkg.Config, target, tool, direction string, flags []string,
 func (m Model) viewForm() string {
 	helpText := "tab/shift+tab to move - enter to submit"
 	if m.mode == modeConfig {
-		helpText = "tab/shift+tab to move - left/right to choose options - enter to continue or validate and save - esc to cancel config edit"
+		helpText = "tab/shift+tab: move | left/right: choose | ctrl+s: save | esc: cancel"
 	}
 	if m.mode == modeOnboarding {
 		helpText = "tab/shift+tab to move - left/right to choose options - enter to continue or validate and save"
@@ -761,6 +792,18 @@ func (m Model) viewForm() string {
 			lines = append(lines, "")
 		}
 	}
+	if m.mode == modeConfig && strings.HasPrefix(m.fields[m.formIndex].key, "ui.target_") {
+		ui := m.cfg.UI
+		ui.TargetFields = m.fieldValue("ui.target_fields")
+		ui.TargetContrast = m.fieldValue("ui.target_contrast")
+		sample := api.Target{Name: "prod-api", Kind: "Ssh", Description: "Primary API"}
+		sample.Group.Name = "production"
+		lines = append(lines, "Target list preview", strings.Join(renderTargetTable([]api.Target{sample}, contentWidth, -1, func(string) bool { return true }, ui), "\n"), "")
+		if err := cfgpkg.ValidateTargetDisplay(ui); err != nil {
+			lines = append(lines, err.Error(), "")
+		}
+	}
+	blocks := make([][]string, len(m.fields))
 	for i, f := range m.fields {
 		label := f.label
 		if i == m.formIndex {
@@ -770,8 +813,30 @@ func (m Model) viewForm() string {
 		if f.isSelect() {
 			fieldView = f.selectView(i == m.formIndex)
 		}
-		lines = append(lines, label, fieldView, mutedStyle.Render(f.hint), "")
+		if len(f.columns) > 0 {
+			fieldView = f.targetColumnsView(i == m.formIndex)
+		}
+		blocks[i] = []string{label, fieldView, mutedStyle.Width(contentWidth).Render(f.hint), ""}
 	}
+	first, last := 0, len(m.fields)
+	if m.mode == modeConfig && m.height > 0 {
+		budget := max(1, m.height-lipgloss.Height(strings.Join(lines, "\n"))-4)
+		blockHeight := func(i int) int { return lipgloss.Height(strings.Join(blocks[i], "\n")) }
+		first, last = m.formIndex, m.formIndex+1
+		used := blockHeight(m.formIndex)
+		for first > 0 && used+blockHeight(first-1) <= budget {
+			first--
+			used += blockHeight(first)
+		}
+		for last < len(blocks) && used+blockHeight(last) <= budget {
+			used += blockHeight(last)
+			last++
+		}
+	}
+	for _, block := range blocks[first:last] {
+		lines = append(lines, block...)
+	}
+
 	if m.formStatus != "" {
 		lines = append(lines, statusBarStyle.Render(m.formStatus))
 	}
