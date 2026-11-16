@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -30,15 +31,23 @@ const (
 	modeTunnelForm
 	modeRsyncForm
 	modeTunnel
+	modeProfiles
 )
 
 type Model struct {
-	cfgPath          string
-	cacheDirOverride string
-	cfg              cfgpkg.Config
-	keys             cfgpkg.KeyMap
-	client           *api.Client
-	tunnel           tunnelSession
+	cfgPath              string
+	cacheDirOverride     string
+	profileOverride      string
+	profileLoading       bool
+	configSaving         bool
+	configSaveGeneration uint64
+	quitAfterConfigSave  bool
+	startupBlocked       bool
+	recoveryNotice       string
+	cfg                  cfgpkg.Config
+	keys                 cfgpkg.KeyMap
+	client               *api.Client
+	tunnel               tunnelSession
 
 	searchBox     textinput.Model
 	searchFocused bool
@@ -58,6 +67,8 @@ type Model struct {
 	formIndex            int
 	fields               []formField
 	formStatus           string
+	formProfile          string
+	profileIndex         int
 	pendingTunnelTarget  string
 	pendingRsyncTarget   string
 	rsyncLastTool        string
@@ -91,25 +102,31 @@ type formField struct {
 }
 
 type loadedMsg struct {
-	cfg      cfgpkg.Config
-	snapshot cache.Snapshot
-	state    cache.State
-	status   string
-	err      error
+	migrationFailed bool
+	notice          string
+	cfg             cfgpkg.Config
+	snapshot        cache.Snapshot
+	state           cache.State
+	status          string
+	err             error
 }
 
 type refreshMsg struct {
+	client   *api.Client
+	profile  string
 	snapshot cache.Snapshot
 	status   string
 	err      error
 }
 
 type configSavedMsg struct {
-	localOnly bool
-	cfg       cfgpkg.Config
-	snapshot  cache.Snapshot
-	status    string
-	err       error
+	generation uint64
+	localOnly  bool
+	cfg        cfgpkg.Config
+	snapshot   cache.Snapshot
+	status     string
+	err        error
+	notice     string
 }
 
 const (
@@ -124,6 +141,12 @@ type Option func(*Model)
 func WithCacheDirOverride(dir string) Option {
 	return func(m *Model) {
 		m.cacheDirOverride = strings.TrimSpace(dir)
+	}
+}
+
+func WithProfile(name string) Option {
+	return func(m *Model) {
+		m.profileOverride = strings.TrimSpace(name)
 	}
 }
 
@@ -153,7 +176,7 @@ func (m Model) Init() tea.Cmd {
 	if m.skipInit {
 		return nil
 	}
-	return loadCmd(m.cfgPath, m.cacheDirOverride)
+	return loadCmd(m.cfgPath, m.cacheDirOverride, m.profileOverride)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -165,6 +188,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleLoaded(msg)
 	case refreshMsg:
 		return m.handleRefresh(msg)
+	case profileLoadedMsg:
+		return m.handleProfileLoaded(msg)
 	case configSavedMsg:
 		return m.handleConfigSaved(msg)
 	case sshpkg.ExecFinishedMsg:
@@ -174,9 +199,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case rsyncFinishedMsg:
 		return m.handleRsyncFinished(msg)
 	case tea.KeyMsg:
+		if m.configSaving {
+			if msg.String() == "ctrl+c" {
+				m.quitAfterConfigSave = true
+				m.formStatus = "finishing config save before exit..."
+			}
+			return m, nil
+		}
 		if msg.String() == "ctrl+c" {
 			m.stopTunnel()
 			return m, tea.Quit
+		}
+		if m.profileLoading || m.startupBlocked {
+			return m, nil
 		}
 		switch m.mode {
 		case modeBrowse:
@@ -189,6 +224,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRsyncForm(msg)
 		case modeTunnel:
 			return m.updateTunnel(msg)
+		case modeProfiles:
+			return m.updateProfilePicker(msg)
 		default:
 			return m, nil
 		}
@@ -219,24 +256,33 @@ func (m Model) handleLoaded(msg loadedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.applyConfig(msg.cfg)
-	m.applyState(msg.state)
-	m.snapshot = msg.snapshot
-	m.status = msg.status
+	m.recoveryNotice = msg.notice
+	m.startupBlocked = msg.migrationFailed
+	return m.showCached(msg.snapshot, msg.state, msg.status)
+}
+
+func (m Model) showCached(snap cache.Snapshot, state cache.State, status string) (tea.Model, tea.Cmd) {
+	m.applyState(state)
+	m.snapshot = snap
+	m.status = status
 	if reason := cacheRejectionReason(m.cfg, m.snapshot); reason != "" {
 		m.snapshot = cache.Snapshot{}
 		m.status = reason
 	}
+	m.applyConnectionInfo(m.snapshot.Info)
 	m.setTargets(m.snapshot.Targets)
-
-	if m.snapshot.FetchedAt.IsZero() || cache.IsStale(m.snapshot, m.cfg.Cache.TTL) {
+	if !m.startupBlocked && (m.snapshot.FetchedAt.IsZero() || cache.IsStale(m.snapshot, m.cfg.Cache.TTL)) {
 		m.status = joinStatus(m.status, "refreshing in background...")
-		return m, refreshCmd(m.client)
+		return m, refreshCmd(m.cfg.Profile, m.client)
 	}
 
 	return m, nil
 }
 
 func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
+	if msg.client != m.client || msg.profile != m.cfg.Profile || m.profileLoading || m.startupBlocked {
+		return m, nil
+	}
 	if msg.err != nil {
 		m.status = msg.err.Error()
 		if reason := cacheRejectionReason(m.cfg, m.snapshot); reason != "" {
@@ -256,20 +302,38 @@ func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
+	if !m.configSaving || msg.generation != m.configSaveGeneration {
+		return m, nil
+	}
+	m.configSaving = false
+	var cmd tea.Cmd
+	if m.quitAfterConfigSave {
+		m.quitAfterConfigSave = false
+		_ = m.stopTunnel()
+		cmd = tea.Quit
+	}
 	if msg.err != nil {
 		m.formStatus = msg.err.Error()
 		m.status = msg.err.Error()
-		return m, nil
+		return m, cmd
 	}
 
+	newProfile := msg.cfg.Profile != m.cfg.Profile && m.formProfile == ""
 	m.applyConfig(msg.cfg)
+	if newProfile {
+		m.applyState(cache.State{})
+	}
 	if !msg.localOnly {
 		m.applySnapshot(msg.snapshot)
+	}
+	m.persistLastProfile()
+	if msg.notice != "" {
+		m.recoveryNotice = msg.notice
 	}
 	m.status = msg.status
 	m.mode = modeBrowse
 	m.formStatus = ""
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleSSHFinished(msg sshpkg.ExecFinishedMsg) (tea.Model, tea.Cmd) {
@@ -329,9 +393,11 @@ func (m Model) updateBrowse(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSelection(m.visibleRows())
 	case key.Matches(msg, m.keys.Refresh):
 		m.status = "refreshing..."
-		return m, refreshCmd(m.client)
+		return m, refreshCmd(m.cfg.Profile, m.client)
 	case key.Matches(msg, m.keys.EditConfig):
 		m.openConfigEditor()
+	case key.Matches(msg, m.keys.Profile):
+		m.openProfilePicker()
 	case key.Matches(msg, m.keys.Connect):
 		return m.connectSelected()
 	case key.Matches(msg, m.keys.Tunnel):
@@ -388,13 +454,24 @@ func (m Model) updateSearchInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyConfig(cfg cfgpkg.Config) {
+	// Reuse the client for local preference changes so a valid refresh can
+	// finish. Connection changes create a new identity, invalidating old work.
+	if m.client == nil || m.cfg.Profile != cfg.Profile || m.cfg.Server != cfg.Server || !reflect.DeepEqual(m.cfg.SSH, cfg.SSH) {
+		m.client = api.New(cfg)
+	}
 	m.cfg = cfg
 	m.keys = cfgpkg.NewKeyMap(cfg.Keys)
-	m.client = api.New(cfg)
 }
 
 func (m Model) cacheDir() string {
-	return resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride)
+	return profileCacheDir(resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride), m.cfg.Profile)
+}
+
+func profileCacheDir(dir, profile string) string {
+	if dir == "" || profile == "" {
+		return dir
+	}
+	return filepath.Join(dir, profile)
 }
 
 func resolveCacheDir(configDir, override string) string {
@@ -476,15 +553,25 @@ func (m *Model) persistState() {
 	_ = cache.SaveState(m.cacheDir(), m.stateSnapshot())
 }
 
+func (m *Model) persistLastProfile() {
+	if dir := resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride); dir != "" {
+		_ = cache.SaveLastProfile(dir, m.cfg.Profile)
+	}
+}
+
 func (m *Model) applySnapshot(snap cache.Snapshot) {
 	m.snapshot = snap
 	if cacheDir := m.cacheDir(); cacheDir != "" {
 		_ = cache.Save(cacheDir, snap)
 	}
-	if snap.Info.Ports.SSH != 0 && (m.cfg.SSH.Port == 0 || m.cfg.SSH.Port == 2222) {
-		m.cfg.SSH.Port = snap.Info.Ports.SSH
-	}
+	m.applyConnectionInfo(snap.Info)
 	m.setTargets(snap.Targets)
+}
+
+func (m *Model) applyConnectionInfo(info api.Info) {
+	if info.Ports.SSH != 0 && (m.cfg.SSH.Port == 0 || m.cfg.SSH.Port == 2222) {
+		m.cfg.SSH.Port = info.Ports.SSH
+	}
 }
 
 func (m *Model) setTargets(targets []api.Target) {
@@ -603,7 +690,7 @@ func (m *Model) copySelectedCommand() {
 	m.status = "ssh command copied"
 }
 
-func loadCmd(cfgPath, cacheDirOverride string) tea.Cmd {
+func loadCmd(cfgPath, cacheDirOverride, profile string) tea.Cmd {
 	return func() tea.Msg {
 		if _, err := os.Stat(cfgPath); err != nil {
 			if os.IsNotExist(err) {
@@ -617,29 +704,63 @@ func loadCmd(cfgPath, cacheDirOverride string) tea.Cmd {
 			return loadedMsg{err: err, status: "failed to load config - fix values below"}
 		}
 
-		cacheDir := resolveCacheDir(cfg.Cache.Dir, cacheDirOverride)
-		snap, err := cache.Load(cacheDir)
-		state, stateErr := cache.LoadState(cacheDir)
-		status := "loaded config"
+		rootDir := resolveCacheDir(cfg.Cache.Dir, cacheDirOverride)
+		notice := ""
+		legacyDir := ""
+		if cfg.Legacy {
+			dest := profileCacheDir(rootDir, cfgpkg.DefaultProfileName)
+			if _, err := os.Stat(dest); os.IsNotExist(err) {
+				backup, err := cache.CopyProfile(rootDir, cfgPath, rootDir, dest, nil)
+				if err != nil {
+					notice = fmt.Sprintf("Cache migration stopped: %v. Original files retained at %s. Backup: %s. Press ctrl+c to exit, fix the backup error, then restart wgt. Changes are disabled.", err, rootDir, backup)
+					legacyDir = rootDir
+				} else {
+					notice = recoveryMessage(backup)
+				}
+			}
+		}
+		profileStatus := ""
 		switch {
-		case err == nil:
-			status = fmt.Sprintf("loaded %d cached targets", len(snap.Targets))
-		case err != nil && !cache.Missing(err):
-			status = "cache unavailable"
+		case profile != "":
+			if err := cfg.Use(profile); err != nil {
+				profileStatus = fmt.Sprintf("%v - using %s", err, cfg.Profile)
+			}
+		case rootDir != "":
+			if last := cache.LoadLastProfile(rootDir); last != "" {
+				_ = cfg.Use(last)
+			}
 		}
 
-		if stateErr != nil && !cache.Missing(stateErr) {
-			status = joinStatus(status, "state unavailable")
+		cacheDir := profileCacheDir(rootDir, cfg.Profile)
+		if legacyDir != "" && cfg.Profile == cfgpkg.DefaultProfileName {
+			cacheDir = legacyDir
 		}
-
-		return loadedMsg{cfg: cfg, snapshot: snap, state: state, status: status}
+		snap, state, status := loadCache(cacheDir)
+		return loadedMsg{migrationFailed: legacyDir != "", notice: notice, cfg: cfg, snapshot: snap, state: state, status: joinStatus(profileStatus, status)}
 	}
 }
 
-func refreshCmd(client *api.Client) tea.Cmd {
+func loadCache(cacheDir string) (cache.Snapshot, cache.State, string) {
+	snap, err := cache.Load(cacheDir)
+	state, stateErr := cache.LoadState(cacheDir)
+	status := "loaded config"
+	switch {
+	case err == nil:
+		status = fmt.Sprintf("loaded %d cached targets", len(snap.Targets))
+	case !cache.Missing(err):
+		status = "cache unavailable"
+	}
+
+	if stateErr != nil && !cache.Missing(stateErr) {
+		status = joinStatus(status, "state unavailable")
+	}
+	return snap, state, status
+}
+
+func refreshCmd(profile string, client *api.Client) tea.Cmd {
 	return func() tea.Msg {
 		if client == nil {
-			return refreshMsg{err: fmt.Errorf("client not configured")}
+			return refreshMsg{client: client, profile: profile, err: fmt.Errorf("client not configured")}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -647,34 +768,73 @@ func refreshCmd(client *api.Client) tea.Cmd {
 
 		info, err := client.GetInfo(ctx)
 		if err != nil {
-			return refreshMsg{err: err}
+			return refreshMsg{client: client, profile: profile, err: err}
 		}
 		targets, err := client.GetTargets(ctx)
 		if err != nil {
-			return refreshMsg{err: err}
+			return refreshMsg{client: client, profile: profile, err: err}
 		}
 
 		snap := cache.Snapshot{FetchedAt: time.Now(), Info: info, Targets: targets}
-		return refreshMsg{snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
+		return refreshMsg{client: client, profile: profile, snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
 	}
 }
 
-// Local preferences do not require a working API connection.
+// beginConfigSave allows one save at a time, including its disk writes.
+func (m Model) beginConfigSave(cfg cfgpkg.Config) (tea.Model, tea.Cmd) {
+	if m.configSaving {
+		return m, nil
+	}
+	m.configSaving = true
+	m.configSaveGeneration++
+	m.formStatus = "saving config... navigation is paused until the save finishes"
+	generation := m.configSaveGeneration
+	save := m.saveConfigCmd(cfg)
+	return m, func() tea.Msg {
+		msg := save().(configSavedMsg)
+		msg.generation = generation
+		return msg
+	}
+}
+
+// Local preferences, including profile names, do not require the API.
 func (m Model) saveConfigCmd(cfg cfgpkg.Config) tea.Cmd {
 	previous := m.cfg
 	_ = deriveSSHHost(&previous)
-	if m.mode == modeConfig && reflect.DeepEqual(previous.Server, cfg.Server) && reflect.DeepEqual(previous.SSH, cfg.SSH) {
+	rootDir, oldProfile, state := resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride), m.formProfile, m.stateSnapshot()
+	if m.mode == modeConfig && oldProfile != "" && reflect.DeepEqual(previous.Server, cfg.Server) && reflect.DeepEqual(previous.SSH, cfg.SSH) {
 		return func() tea.Msg {
-			if err := cfgpkg.Save(m.cfgPath, cfg); err != nil {
-				return configSavedMsg{err: err}
-			}
-			return configSavedMsg{cfg: cfg, localOnly: true, status: "config saved"}
+			msg := persistConfig(m.cfgPath, cfg, rootDir, oldProfile, state)
+			msg.localOnly = true
+			msg.status = "config saved"
+			return msg
 		}
 	}
-	return validateAndSaveCmd(m.cfgPath, cfg)
+	return validateAndSaveCmd(m.cfgPath, cfg, rootDir, oldProfile, state)
 }
 
-func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config) tea.Cmd {
+// Both local saves and validated connection changes use the same backup and
+// profile-state transaction.
+func persistConfig(cfgPath string, cfg cfgpkg.Config, rootDir, oldProfile string, state cache.State) configSavedMsg {
+	notice, renamedDir := "", ""
+	if oldProfile != "" && oldProfile != cfg.Profile {
+		renamedDir = profileCacheDir(rootDir, cfg.Profile)
+		backup, err := cache.CopyProfile(rootDir, cfgPath, profileCacheDir(rootDir, oldProfile), renamedDir, &state)
+		if err != nil {
+			return configSavedMsg{err: fmt.Errorf("rename stopped: %w (backup: %s)", err, backup)}
+		}
+		notice = recoveryMessage(backup)
+	}
+	if err := cfgpkg.Save(cfgPath, cfg); err != nil {
+		if renamedDir != "" {
+			_ = os.RemoveAll(renamedDir)
+		}
+		return configSavedMsg{err: err}
+	}
+	return configSavedMsg{cfg: cfg, notice: notice}
+}
+
+func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config, rootDir, oldProfile string, state cache.State) tea.Cmd {
 	return func() tea.Msg {
 		client := api.New(cfg)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -690,16 +850,18 @@ func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config) tea.Cmd {
 		}
 
 		snap := cache.Snapshot{FetchedAt: time.Now(), Info: info, Targets: targets}
-		if err := cfgpkg.Save(cfgPath, cfg); err != nil {
-			return configSavedMsg{err: err}
+		msg := persistConfig(cfgPath, cfg, rootDir, oldProfile, state)
+		if msg.err != nil {
+			return msg
 		}
-
-		return configSavedMsg{
-			cfg:      cfg,
-			snapshot: snap,
-			status:   fmt.Sprintf("config saved - loaded %d targets", len(targets)),
-		}
+		msg.snapshot = snap
+		msg.status = fmt.Sprintf("config saved - loaded %d targets", len(targets))
+		return msg
 	}
+}
+
+func recoveryMessage(backup string) string {
+	return fmt.Sprintf("Saved a backup at %s. To restore: close wgt, follow %s, then restart.", backup, filepath.Join(backup, "RESTORE.txt"))
 }
 
 func (m Model) View() string {
@@ -708,6 +870,8 @@ func (m Model) View() string {
 		return m.viewBrowse()
 	case modeTunnel:
 		return m.viewTunnel()
+	case modeProfiles:
+		return m.viewProfiles()
 	default:
 		return m.viewForm()
 	}
@@ -754,13 +918,25 @@ func (m Model) viewBrowse() string {
 		searchLabel = searchFocusStyle.Render("Search")
 	}
 
-	return strings.Join([]string{
+	rows := []string{
 		m.viewTopChrome("wgt", m.browseTitleText(), m.browseHelpBindings().short),
 		searchLabel,
 		m.searchBox.View(),
 		body,
-		statusBarStyle.Width(max(0, m.width-2)).Render(m.status),
-	}, "\n")
+	}
+	if m.recoveryNotice != "" {
+		rows = append(rows, m.viewRecoveryNotice())
+	}
+	rows = append(rows, statusBarStyle.Width(max(0, m.width-2)).Render(m.status))
+	return strings.Join(rows, "\n")
+}
+
+func (m Model) viewRecoveryNotice() string {
+	width := m.width
+	if width == 0 {
+		width = 100
+	}
+	return lipgloss.NewStyle().Width(max(20, width-4)).Render(m.recoveryNotice)
 }
 
 func (m Model) listView(width int) string {
@@ -837,6 +1013,10 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 		" ",
 		modeActiveStyle.Render(m.currentPageLabel()),
 	)
+	if m.showProfileBadge() {
+		label := m.cfg.Profile + " (profile)"
+		header = lipgloss.JoinHorizontal(lipgloss.Center, header, " ", modeInactiveStyle.Render(label))
+	}
 	rows := []string{header}
 	if strings.TrimSpace(summary) != "" {
 		rows = append(rows, mutedStyle.Render(summary))
@@ -858,6 +1038,15 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 	return strings.Join(rows, "\n")
 }
 
+func (m Model) showProfileBadge() bool {
+	switch {
+	case m.mode == modeOnboarding, m.mode == modeConfig && m.formProfile == "":
+		return false
+	default:
+		return strings.TrimSpace(m.cfg.Profile) != ""
+	}
+}
+
 func (m Model) currentPageLabel() string {
 	if m.mode == modeBrowse && (m.searchFocused || strings.TrimSpace(m.searchBox.Value()) != "") {
 		return "search"
@@ -873,6 +1062,8 @@ func (m Model) currentPageLabel() string {
 		return "config"
 	case modeOnboarding:
 		return "onboarding"
+	case modeProfiles:
+		return "profiles"
 	default:
 		return "browse"
 	}

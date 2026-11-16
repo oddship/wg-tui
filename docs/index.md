@@ -51,6 +51,12 @@ Open local forwards through Warpgate from inside the TUI and manage them from a 
 </article>
 
 <article class="card">
+<header><h3>Profiles</h3></header>
+
+Switch Warpgate upstreams with `p`. Each profile keeps its own connection settings, cached targets, and transfer drafts.
+</article>
+
+<article class="card">
 <header><h3>Transfers</h3></header>
 
 Run `rsync` or `scp` uploads and downloads through Warpgate without leaving the TUI.

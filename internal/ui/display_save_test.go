@@ -23,6 +23,7 @@ func TestDisplaySettingsSaveOfflineAndPreserveTargets(t *testing.T) {
 	cfg.SSH.Username = "test"
 	cfg.Cache.Dir = t.TempDir()
 	path := filepath.Join(t.TempDir(), "config.huml")
+	cfg.CommitActive()
 	if err := cfgpkg.Save(path, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,9 @@ func TestDisplaySettingsSaveOfflineAndPreserveTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msg := m.saveConfigCmd(updated)().(configSavedMsg)
+	saving, save := m.beginConfigSave(updated)
+	m = saving.(Model)
+	msg := save().(configSavedMsg)
 	if msg.err != nil || !msg.localOnly {
 		t.Fatalf("offline save failed: %+v", msg)
 	}
@@ -71,6 +74,7 @@ func TestConnectionChangesAndOnboardingStillValidateAPI(t *testing.T) {
 	cfg.SSH.Username = "test"
 	cfg.SSH.Host = "test-host"
 	path := filepath.Join(t.TempDir(), "config.huml")
+	cfg.CommitActive()
 	if err := cfgpkg.Save(path, cfg); err != nil {
 		t.Fatal(err)
 	}

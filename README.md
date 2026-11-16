@@ -19,6 +19,7 @@ It is built for the common Warpgate workflow:
 - cache-first startup with background refresh
 - first-run onboarding inside the TUI
 - in-app config editing
+- multiple Warpgate upstreams via switchable profiles
 - configurable keybindings via config
 - native `ssh` handoff
 - can open approval links locally during SSH browser approval flows
@@ -171,9 +172,10 @@ Useful flags:
 wgt --help
 wgt --config /path/to/config.huml
 wgt --cache-path /path/to/cache-dir
+wgt --profile staging
 ```
 
-`--cache-path` only affects the current run. It does not rewrite `cache.dir` in your saved config.
+`--cache-path` and `--profile` only affect the current run. They do not rewrite `cache.dir` or `default_profile` in your saved config.
 
 ### Tunnel mode
 
@@ -204,6 +206,7 @@ For downloads, the remote path is the source and the local path is the destinati
 ## First run
 
 On first launch, `wgt` opens an onboarding flow and asks for:
+- profile name (initially `default`)
 - Warpgate server URL
 - Warpgate API token
 - SSH username
@@ -217,7 +220,7 @@ On Linux, that is usually:
 - config: `~/.config/wgt/config.huml`
 - cache and local state: `~/.cache/wgt/`
 
-The cache directory also stores recent targets and remembered transfer form state.
+Each profile has its own cached targets, recent targets, and remembered transfer form state under the cache directory.
 
 Recently used targets rise to the top of the list and show a compact `↺` marker. A refresh keeps the same target selected by name. If it disappears, choose another target before connecting, tunnelling, or transferring.
 
@@ -229,7 +232,7 @@ See the [target browser walkthrough](docs/01-guide/04-target-browser.md) for dis
 
 You only need to set `cache.dir` if you want to override the platform default.
 
-Press `e` to edit display settings. Targets appear above Details by default. Use the column editor to show, hide, and reorder columns, with a live preview. Display-only changes can be saved offline. In the bottom Details pane, `alt+up` / `alt+down` scroll through full metadata while the SSH command stays visible.
+Press `e` to edit display settings. Targets appear above Details by default. Use the column editor to show, hide, and reorder columns, with a live preview. Display-only changes and profile renames can be saved offline. In the bottom Details pane, `alt+up` / `alt+down` scroll through full metadata while the SSH command stays visible.
 
 `ui.approval_open_command` must include `%s`, which `wgt` replaces with the approval URL.
 
@@ -238,19 +241,23 @@ Example:
 ```huml
 %HUML v0.2.0
 
-server::
-  url: "https://warpgate.example.com"
-  token: "<warpgate-api-token>"
-  insecure_skip_tls_verify: false
+default_profile: "default"
 
-ssh::
-  username: "user@example.com"
-  host: "warpgate.example.com"
-  port: 2222
-  binary: "ssh"
-  extra_args::
-    - "-o"
-    - "ServerAliveInterval=30"
+profiles::
+  default::
+    server::
+      url: "https://warpgate.example.com"
+      token: "<warpgate-api-token>"
+      insecure_skip_tls_verify: false
+
+    ssh::
+      username: "user@example.com"
+      host: "warpgate.example.com"
+      port: 2222
+      binary: "ssh"
+      extra_args::
+        - "-o"
+        - "ServerAliveInterval=30"
 
 cache::
   dir: "/path/to/cache/wgt"
@@ -293,6 +300,8 @@ keys::
     - "r"
   edit_config::
     - "e"
+  profile::
+    - "p"
   copy::
     - "c"
   help::
@@ -301,6 +310,16 @@ keys::
     - "q"
     - "ctrl+c"
 ```
+
+## Profiles
+
+Press `p` in browse mode to select a Warpgate upstream. Enter switches profiles; `n` creates a new one; Escape closes the picker. The top bar shows the active name, for example `default (profile)`. Press `e` to rename it or edit its connection settings.
+
+At startup, `--profile` takes priority over the last used profile, then `default_profile`. Server and SSH settings belong to each profile; cache policy, display settings, and keybindings are shared. If `ssh.host` is omitted, it comes from `server.url`.
+
+Older top-level `server` and `ssh` configs still load as `default`. Migration and renaming retain the original data and save dated backups under `<cache.dir>/.backups/`. A persistent notice points to the backup and its `RESTORE.txt` instructions. See [Configuration](docs/02-reference/01-configuration.md) for naming rules and recovery steps.
+
+![Profile picker](docs/_static/assets/wgt-profile-picker.png)
 
 ## Default keybindings
 
@@ -313,6 +332,7 @@ Browse mode:
 - `s` - open transfer form for the selected target
 - `r` - refresh targets from Warpgate
 - `e` - edit config
+- `p` - switch or create profiles
 - `c` - copy the SSH command shown in the details panel
 - `?` - expand or collapse keyboard help
 - `alt+up` / `alt+down` - scroll the bottom Details pane
@@ -323,7 +343,9 @@ Config editor:
 - `left` / `right` - change a selected option
 - in Target Columns, use `up` / `down` to select, `space` to show or hide, and `-` / `+` to move a column up or down
 - `ctrl+s` - save from any field
-- `esc` - cancel edits
+- `esc` - cancel edits before saving
+
+Saving pauses navigation and further edits until it finishes. `ctrl+c` waits for the save to finish before exiting.
 
 Tunnel form:
 - type remote and local ports

@@ -107,6 +107,15 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		BuildModel:  docScenarioOnboardingModel,
 	},
 	{
+		Name:        "profile-picker",
+		WaitPattern: "Switch profile",
+		Screenshot:  "wgt-profile-picker.png",
+		Group:       docCaptureVHSForms,
+		ShowSleep:   "450ms",
+		HoldSleep:   "600ms",
+		BuildModel:  docScenarioProfilePickerModel,
+	},
+	{
 		Name:        "config-editor",
 		WaitPattern: "edit config and press enter to save",
 		Screenshot:  "wgt-config-editor.png",
@@ -406,6 +415,12 @@ func docScenarioOnboardingModel(fixtures DocCaptureFixtures) (Model, error) {
 	m.mode = modeOnboarding
 	m.startForm(false)
 	m.setWindowSize(tea.WindowSizeMsg{Width: docCaptureWidth, Height: docCaptureHeight})
+	return m, nil
+}
+
+func docScenarioProfilePickerModel(fixtures DocCaptureFixtures) (Model, error) {
+	m := newDocCaptureModel(fixtures)
+	m.openProfilePicker()
 	return m, nil
 }
 

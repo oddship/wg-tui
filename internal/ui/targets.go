@@ -17,6 +17,9 @@ func (m Model) browsePaneHeights() (int, int) {
 		height = 34
 	}
 	chrome := lipgloss.Height(m.viewTopChrome("wgt", m.browseTitleText(), m.browseHelpBindings().short))
+	if m.recoveryNotice != "" {
+		chrome += lipgloss.Height(m.viewRecoveryNotice())
+	}
 	body := max(8, height-chrome-3)
 	if m.cfg.UI.DetailsPane == "right" && m.width >= 72 {
 		return body, body

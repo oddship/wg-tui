@@ -60,7 +60,7 @@ To check fixture loading and write ANSI captures without running VHS:
 WG_TUI_CAPTURE_OUT=/tmp/wgt-doc-captures go test ./internal/ui -run TestDocCaptureScenarios -count=1
 ```
 
-This uses the same scenario registry as the screenshots. It includes the default bottom layout and the target-column editor, so fixture or rendering changes can be checked before regenerating media.
+This uses the same scenario registry as the screenshots. It includes the default bottom layout, the profile picker, and the target-column editor, so fixture or rendering changes can be checked before regenerating media.
 
 ## Notes
 
