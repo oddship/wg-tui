@@ -9,6 +9,9 @@ import (
 var profileNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func ValidateProfileName(name string) error {
+	if strings.EqualFold(name, "last_profile") {
+		return fmt.Errorf("profile name %q is reserved for application state", name)
+	}
 	if !profileNamePattern.MatchString(name) {
 		return fmt.Errorf("invalid profile name %q: use letters, digits, - or _", name)
 	}

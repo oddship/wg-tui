@@ -109,6 +109,7 @@ type loadedMsg struct {
 }
 
 type refreshMsg struct {
+	client   *api.Client
 	profile  string
 	snapshot cache.Snapshot
 	status   string
@@ -257,6 +258,7 @@ func (m Model) showCached(snap cache.Snapshot, state cache.State, status string)
 		m.snapshot = cache.Snapshot{}
 		m.status = reason
 	}
+	m.applyConnectionInfo(m.snapshot.Info)
 	m.setTargets(m.snapshot.Targets)
 	if !m.startupBlocked && (m.snapshot.FetchedAt.IsZero() || cache.IsStale(m.snapshot, m.cfg.Cache.TTL)) {
 		m.status = joinStatus(m.status, "refreshing in background...")
@@ -267,7 +269,7 @@ func (m Model) showCached(snap cache.Snapshot, state cache.State, status string)
 }
 
 func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
-	if msg.profile != m.cfg.Profile || m.profileLoading || m.startupBlocked {
+	if msg.client != m.client || msg.profile != m.cfg.Profile || m.profileLoading || m.startupBlocked {
 		return m, nil
 	}
 	if msg.err != nil {
@@ -431,9 +433,13 @@ func (m Model) updateSearchInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) applyConfig(cfg cfgpkg.Config) {
+	// Reuse the client for local preference changes so a valid refresh can
+	// finish. Connection changes create a new identity, invalidating old work.
+	if m.client == nil || m.cfg.Profile != cfg.Profile || m.cfg.Server != cfg.Server || !reflect.DeepEqual(m.cfg.SSH, cfg.SSH) {
+		m.client = api.New(cfg)
+	}
 	m.cfg = cfg
 	m.keys = cfgpkg.NewKeyMap(cfg.Keys)
-	m.client = api.New(cfg)
 }
 
 func (m Model) cacheDir() string {
@@ -537,10 +543,14 @@ func (m *Model) applySnapshot(snap cache.Snapshot) {
 	if cacheDir := m.cacheDir(); cacheDir != "" {
 		_ = cache.Save(cacheDir, snap)
 	}
-	if snap.Info.Ports.SSH != 0 && (m.cfg.SSH.Port == 0 || m.cfg.SSH.Port == 2222) {
-		m.cfg.SSH.Port = snap.Info.Ports.SSH
-	}
+	m.applyConnectionInfo(snap.Info)
 	m.setTargets(snap.Targets)
+}
+
+func (m *Model) applyConnectionInfo(info api.Info) {
+	if info.Ports.SSH != 0 && (m.cfg.SSH.Port == 0 || m.cfg.SSH.Port == 2222) {
+		m.cfg.SSH.Port = info.Ports.SSH
+	}
 }
 
 func (m *Model) setTargets(targets []api.Target) {
@@ -729,7 +739,7 @@ func loadCache(cacheDir string) (cache.Snapshot, cache.State, string) {
 func refreshCmd(profile string, client *api.Client) tea.Cmd {
 	return func() tea.Msg {
 		if client == nil {
-			return refreshMsg{profile: profile, err: fmt.Errorf("client not configured")}
+			return refreshMsg{client: client, profile: profile, err: fmt.Errorf("client not configured")}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -737,15 +747,15 @@ func refreshCmd(profile string, client *api.Client) tea.Cmd {
 
 		info, err := client.GetInfo(ctx)
 		if err != nil {
-			return refreshMsg{profile: profile, err: err}
+			return refreshMsg{client: client, profile: profile, err: err}
 		}
 		targets, err := client.GetTargets(ctx)
 		if err != nil {
-			return refreshMsg{profile: profile, err: err}
+			return refreshMsg{client: client, profile: profile, err: err}
 		}
 
 		snap := cache.Snapshot{FetchedAt: time.Now(), Info: info, Targets: targets}
-		return refreshMsg{profile: profile, snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
+		return refreshMsg{client: client, profile: profile, snapshot: snap, status: fmt.Sprintf("refreshed %d targets", len(targets))}
 	}
 }
 

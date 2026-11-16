@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -28,7 +29,7 @@ func Load(path string) (Config, error) {
 	if !k.Exists("keys.profile") {
 		cfg.Keys.Profile = nil
 	}
-	if len(cfg.Profiles) == 0 && k.Exists("server") {
+	if len(cfg.Profiles) == 0 && !k.Exists("profiles") {
 		cfg.Legacy = true
 		cfg.Profiles = map[string]Profile{DefaultProfileName: {Server: cfg.Server, SSH: cfg.SSH}}
 	}
@@ -134,6 +135,11 @@ func applyDerived(cfg *Config) {
 	applySSHDefaults(&cfg.SSH, def.SSH)
 	for name, p := range cfg.Profiles {
 		applySSHDefaults(&p.SSH, def.SSH)
+		if p.SSH.Host == "" {
+			if serverURL, err := url.Parse(p.Server.URL); err == nil {
+				p.SSH.Host = serverURL.Hostname()
+			}
+		}
 		cfg.Profiles[name] = p
 	}
 	if cfg.Cache.Dir == "" {

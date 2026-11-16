@@ -38,7 +38,7 @@ func (m *Model) startFormFrom(cfg cfgpkg.Config, title, profile string) {
 		newSelectField("ui.approval_open_mode", "Open Approval Link", []string{cfgpkg.ApprovalOpenModeAsk, cfgpkg.ApprovalOpenModeAlways, cfgpkg.ApprovalOpenModeNever}, cfg.UI.ApprovalOpenMode, "ask prompts each time - always opens automatically - never stays manual"),
 		newField("ui.approval_open_command", "Browser Open Command", cfg.UI.ApprovalOpenCommand, "Use %s for the approval URL, for example xdg-open %s or firefox %s"),
 	}
-	if edit {
+	if profile != "" {
 		m.fields = append(m.fields,
 			newSelectField("ui.details_pane", "Details Position", []string{"bottom", "right"}, cfg.UI.DetailsPane, "bottom stacks Targets above Details; right places Details beside Targets"),
 			newTargetColumnsField(cfg.UI.TargetFields),

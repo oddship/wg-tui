@@ -98,7 +98,7 @@ func TestRefreshFromPreviousProfileIsIgnored(t *testing.T) {
 	m := multiProfileModel(t)
 	m.setTargets([]api.Target{{Name: "prod-db"}})
 
-	updatedAny, _ := m.handleRefresh(refreshMsg{profile: "staging", snapshot: cache.Snapshot{Targets: []api.Target{{Name: "staging-db"}}}})
+	updatedAny, _ := m.handleRefresh(refreshMsg{client: m.client, profile: "staging", snapshot: cache.Snapshot{Targets: []api.Target{{Name: "staging-db"}}}})
 	updated := updatedAny.(Model)
 
 	if len(updated.targets) != 1 || updated.targets[0].Name != "prod-db" {

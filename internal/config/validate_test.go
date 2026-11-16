@@ -271,3 +271,35 @@ func writeHUML(t *testing.T, data map[string]any) string {
 	}
 	return path
 }
+
+func TestLoadRejectsReservedProfileName(t *testing.T) {
+	for _, name := range []string{"last_profile", "LAST_PROFILE", "Last_Profile"} {
+		path := writeHUML(t, map[string]any{"default_profile": name, "profiles": map[string]any{name: map[string]any{"server": map[string]any{"url": "https://example.com"}}}})
+		if _, err := Load(path); err == nil {
+			t.Fatalf("reserved profile name %q loaded", name)
+		}
+	}
+}
+
+func TestProfileSSHHostDefaultsAndOverrides(t *testing.T) {
+	path := writeHUML(t, map[string]any{
+		"default_profile": "derived",
+		"profiles": map[string]any{
+			"derived":  map[string]any{"server": map[string]any{"url": "https://[::1]:8443/path"}},
+			"override": map[string]any{"server": map[string]any{"url": "https://example.com:8443"}, "ssh": map[string]any{"host": "ssh.example.com"}},
+		},
+	})
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SSH.Host != "::1" {
+		t.Fatalf("incorrect IPv6 host: %q", cfg.SSH.Host)
+	}
+	if err := cfg.Use("override"); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SSH.Host != "ssh.example.com" {
+		t.Fatalf("explicit host overwritten: %q", cfg.SSH.Host)
+	}
+}

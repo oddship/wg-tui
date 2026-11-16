@@ -32,13 +32,13 @@ wgt --profile staging
 
 ## Profiles
 
-Each profile points at one Warpgate upstream and has its own `server` and `ssh` settings. `cache`, `ui` and `keys` are shared by all profiles.
+Each profile points at one Warpgate upstream and has its own `server` and `ssh` settings. If `ssh.host` is omitted, it defaults to the hostname in `server.url`. `cache`, `ui` and `keys` are shared by all profiles.
 
 - at startup `wgt` opens `--profile` if passed, otherwise the last profile you used, otherwise `default_profile`
 - the last used profile is stored in `<cache.dir>/last_profile`; a profile picked with `--profile` is not remembered
 - press `p` in the target list to open the profile picker, then `enter` to switch or `n` to create a new profile
 - press `e` to edit, or rename, the active profile
-- profile names may only contain letters, digits, `-` and `_`
+- profile names may only contain letters, digits, `-` and `_`; `last_profile` is reserved (regardless of case)
 
 Configs from older versions with top-level `server` and `ssh` sections still load. They are treated as a profile named `default` and written in the new shape on the next save.
 

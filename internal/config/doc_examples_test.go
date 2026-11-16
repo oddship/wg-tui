@@ -30,6 +30,14 @@ func TestDocumentedConfigExamplesLoad(t *testing.T) {
 			if err != nil {
 				t.Fatalf("example does not load: %v", err)
 			}
+			for _, name := range cfg.ProfileNames() {
+				if err := cfg.Use(name); err != nil {
+					t.Fatal(err)
+				}
+				if cfg.SSH.Host == "" {
+					t.Fatalf("documented profile %q has no SSH hostname", name)
+				}
+			}
 			if cfg.UI.DetailsPane != Default().UI.DetailsPane || cfg.UI.TargetFields != Default().UI.TargetFields || cfg.UI.TargetContrast != Default().UI.TargetContrast {
 				t.Fatalf("documented defaults differ from app: %+v", cfg.UI)
 			}

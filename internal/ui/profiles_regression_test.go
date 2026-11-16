@@ -40,7 +40,7 @@ func TestSwitchProfileBlocksQueuedActionsUntilCacheLoads(t *testing.T) {
 		}
 	}
 	// A refresh already in flight must not repopulate targets while loading.
-	updated, _ = m.handleRefresh(refreshMsg{profile: "staging", snapshot: cache.Snapshot{Targets: []api.Target{{Name: "outdated"}}}})
+	updated, _ = m.handleRefresh(refreshMsg{client: m.client, profile: "staging", snapshot: cache.Snapshot{Targets: []api.Target{{Name: "outdated"}}}})
 	m = updated.(Model)
 	if len(m.filtered) != 0 {
 		t.Fatal("refresh bypassed switch lock")
@@ -99,7 +99,7 @@ func TestLegacyStartupMigratesCacheOnceAndDisplaysRecoveryNotice(t *testing.T) {
 	m := New(path)
 	updated, _ := m.handleLoaded(msg)
 	m = updated.(Model)
-	updated, _ = m.handleRefresh(refreshMsg{profile: "default", err: os.ErrPermission})
+	updated, _ = m.handleRefresh(refreshMsg{client: m.client, profile: "default", err: os.ErrPermission})
 	m = updated.(Model)
 	if !strings.Contains(m.View(), "RESTORE.txt") {
 		t.Fatal("refresh hid recovery instructions")

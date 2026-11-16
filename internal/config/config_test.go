@@ -75,6 +75,7 @@ func TestTargetDisplayRoundTrip(t *testing.T) {
 	cfg.UI.TargetFields = "kind, description"
 	cfg.UI.TargetContrast = "subtle"
 	path := t.TempDir() + "/config.huml"
+	cfg.CommitActive()
 	if err := Save(path, cfg); err != nil {
 		t.Fatal(err)
 	}
