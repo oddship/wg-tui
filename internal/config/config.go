@@ -29,6 +29,7 @@ type Config struct {
 
 	// Profile, Server and SSH hold the active profile, set via Use. Top-level
 	// server/ssh keys are only read to migrate legacy single-upstream configs.
+	Legacy  bool         `koanf:"-"`
 	Profile string       `koanf:"-"`
 	Server  ServerConfig `koanf:"server"`
 	SSH     SSHConfig    `koanf:"ssh"`

@@ -55,6 +55,10 @@ func (m Model) switchProfile(name string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.applyConfig(cfg)
+	m.profileLoading = true
+	m.snapshot = cache.Snapshot{}
+	m.applyState(cache.State{})
+	m.setTargets(nil)
 	m.persistLastProfile()
 	m.selected = 0
 	m.status = fmt.Sprintf("switching to profile %s...", name)
@@ -69,6 +73,7 @@ func (m Model) handleProfileLoaded(msg profileLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.profile != m.cfg.Profile {
 		return m, nil
 	}
+	m.profileLoading = false
 	return m.showCached(msg.snapshot, msg.state, joinStatus("profile "+msg.profile+":", msg.status))
 }
 

@@ -42,6 +42,18 @@ Each profile points at one Warpgate upstream and has its own `server` and `ssh` 
 
 Configs from older versions with top-level `server` and `ssh` sections still load. They are treated as a profile named `default` and written in the new shape on the next save.
 
+## Backups and recovery
+
+On the first startup with an older config, `wgt` copies the existing target snapshot and local state into the `default` profile. When you rename a profile, it copies that profile's data to the new name, including recent targets and remembered transfer settings. Target actions are unavailable while a profile switch loads its data.
+
+Before either copy, `wgt` saves the original config and any existing `snapshot.json` and `state.json` files in a dated directory under `<cache.dir>/.backups/`. With `--cache-path`, backups go under that directory instead. The original data stays in place. Backup directories are private, and backup files use owner-only read/write permissions.
+
+A notice stays visible in the target list for the rest of the session, even after a refresh. It shows the backup location and the path to `RESTORE.txt`, which contains the exact source and destination paths for recovery.
+
+To restore, close `wgt`, copy the files listed in `RESTORE.txt` back to their original paths, and move the newly created profile directory aside. Then restart `wgt`. Restoring replaces any config or saved state changed since the backup.
+
+Existing profile directories are never replaced during a copy. Renaming to a name whose data directory already exists stops with an error. Move that directory aside before retrying if you want to reuse the name. If a backup fails, `wgt` retains the original files and reports the error. A failed startup migration disables actions until you exit, fix the error and restart.
+
 ## Example config
 
 You only need to set `cache.dir` if you want to override the platform default.

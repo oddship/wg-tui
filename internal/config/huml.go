@@ -29,6 +29,7 @@ func Load(path string) (Config, error) {
 		cfg.Keys.Profile = nil
 	}
 	if len(cfg.Profiles) == 0 && k.Exists("server") {
+		cfg.Legacy = true
 		cfg.Profiles = map[string]Profile{DefaultProfileName: {Server: cfg.Server, SSH: cfg.SSH}}
 	}
 	if cfg.DefaultProfile == "" && len(cfg.Profiles) > 0 {
