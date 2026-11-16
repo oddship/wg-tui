@@ -12,6 +12,16 @@ The bottom Details pane wraps metadata and descriptions. Use `alt+up` / `alt+dow
 
 Enter connects to the selected target. `t` opens the tunnel form and `s` opens the transfer form. Leave search with Escape before using browse actions. Press `?` in browse mode to show the full shortcut list, and press it again to close Help.
 
+## Switch profiles
+
+The header identifies the active upstream, for example `default (profile)`. `default` is a profile name; you can rename it in `e`.
+
+Press `p` after leaving search. The profile picker shows each name and server URL. Arrow keys move, Enter switches, `n` starts a new profile, and Escape cancels. These local actions remain available when navigation aliases are customized. Target actions pause until the selected profile's cache and state have loaded.
+
+![Profile picker](../../_static/assets/wgt-profile-picker.png)
+
+Each profile remembers its own cached targets, recent targets, and transfer drafts. For startup selection and backup recovery, see [Configuration](../../reference/configuration/).
+
 ## Choose columns and layout
 
 Press `e`, then Tab to Target Columns. The preview above the editor updates as you make changes.
@@ -24,7 +34,7 @@ Details Position switches between `bottom` and `right`. Bottom puts Details belo
 
 Target Metadata Brightness offers `normal`, which uses terminal text color, and `subtle`, which uses a secondary color. On narrow panes, the table hides trailing columns while retaining Name. Full metadata remains available in Details.
 
-Press `ctrl+s` to save from any setting, or Escape to cancel. Display-only changes save locally, including when Warpgate is unavailable. Changes to server or SSH connection settings still require API validation.
+Press `ctrl+s` to save from any setting, or Escape to cancel before saving. Display-only changes and profile renames save locally, including when Warpgate is unavailable. Changes to server or SSH connection settings still require API validation. While saving, navigation and further edits are paused. `ctrl+c` waits for the save to finish before exiting.
 
 ## Refresh and offline behavior
 

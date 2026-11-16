@@ -25,6 +25,7 @@ The product MUST:
 - store configuration in HUML
 - allow configuration review and editing from inside the TUI
 - support manual cache refresh from the TUI
+- support named profiles for separate Warpgate upstreams
 
 The product SHOULD:
 - render cached targets immediately when available
@@ -159,7 +160,8 @@ When the app writes config back to disk, it SHOULD prefer readable block-list ou
 ### 8.3 Required config fields
 
 The config model MUST support at least:
-- server URL
+- named profiles and a default profile
+- per-profile server URL
 - API token
 - TLS insecure toggle
 - SSH username
@@ -179,22 +181,26 @@ The config model MUST support at least:
 ```huml
 %HUML v0.2.0
 
-server::
-  url: "https://warpgate.example.com"
-  token: "<warpgate-api-token>"
-  insecure_skip_tls_verify: false
+default_profile: "default"
 
-ssh::
-  username: "user@example.com"
-  host: "warpgate.example.com"
-  port: 2222
-  binary: "ssh"
-  extra_args::
-    - "-o"
-    - "ServerAliveInterval=30"
+profiles::
+  default::
+    server::
+      url: "https://warpgate.example.com"
+      token: "<warpgate-api-token>"
+      insecure_skip_tls_verify: false
+
+    ssh::
+      username: "user@example.com"
+      host: "warpgate.example.com"
+      port: 2222
+      binary: "ssh"
+      extra_args::
+        - "-o"
+        - "ServerAliveInterval=30"
 
 cache::
-  dir: "~/.cache/wgt"
+  dir: "/path/to/cache/wgt"
   ttl: "10m"
   max_age: "168h"
   use_stale_on_error: true
@@ -230,6 +236,8 @@ keys::
     - "r"
   edit_config::
     - "e"
+  profile::
+    - "p"
   copy::
     - "c"
   help::
@@ -252,11 +260,21 @@ The intended flow is:
 3. unmarshal koanf into the application config struct
 4. when saving, marshal config back through koanf's HUML parser and write it to disk
 
+### 8.6 Profiles and recovery
+
+Each named profile MUST contain its own server and SSH settings. Cache policy, UI preferences, and keybindings MUST remain shared. Cached targets, recent targets, and transfer drafts MUST be stored separately for each profile.
+
+Startup MUST prefer `--profile`, then a valid last-used profile, then `default_profile`. The last-used profile MUST be stored at `<cache.dir>/last_profile`. Profile names MUST use only letters, digits, `-`, and `_`; `last_profile` is reserved regardless of case. A missing SSH host MUST default to the hostname in that profile's server URL.
+
+The browse key `p` MUST open the profile picker by default. The picker MUST keep arrow navigation, Enter selection, `n` creation, and Escape cancellation available when navigation keys are customized. The header MUST identify the active profile. Target actions MUST pause while a profile switch loads its data.
+
+Legacy single-upstream configs MUST load as a profile named `default`. Migration and renaming MUST retain the original files and create a dated backup of the config and any existing snapshot and state under `<cache.dir>/.backups/`. The UI MUST show a persistent notice pointing to the backup and exact restore instructions. Backup failure MUST stop the copy; a failed startup migration MUST disable actions until the user fixes the error and restarts.
+
 ## 9. Onboarding Requirements
 
 If the config file does not exist, the application MUST show onboarding instead of the main target browser.
 
-Onboarding MUST:
+Onboarding MUST prompt for a profile name, initially `default`. It MUST also:
 1. prompt for server URL
 2. prompt for SSH username
 3. prompt for API token
@@ -280,6 +298,10 @@ The config UI MUST allow the user to:
 - edit and save config values
 - edit keybindings
 - reload config after save
+
+Display-only changes and name-only profile renames MUST save without contacting the API. Changes to connection settings MUST validate `/info` and `/targets` before saving. Renames MUST preserve the current target snapshot and local state.
+
+The editor MUST allow one save at a time and pause navigation and further edits until it completes. A quit request during saving MUST wait for completion. Stale save and refresh results MUST NOT replace the active profile or its targets.
 
 The config editor MAY start as a structured form rather than a raw text editor.
 
@@ -471,11 +493,12 @@ The config model MUST support keybindings for at least:
 - open tunnel form for selected target
 - refresh from API
 - open config editor
+- open profile picker
 - copy SSH command
 - toggle help
 - quit
 
-Tunnel-page controls, form navigation, and detail scrolling MAY use fixed local keys, provided help text reflects them accurately. Expanded Help MUST show the available browse and tunnel actions, including paging and copying commands.
+Tunnel-page controls, profile-picker actions, form navigation, and detail scrolling MAY use fixed local keys, provided help text reflects them accurately. Expanded Help MUST show the available browse and tunnel actions, including paging and copying commands.
 The browse action that opens the tunnel form MUST be configurable.
 
 ### 15.4 Validation
@@ -637,4 +660,4 @@ v1 is acceptable when all of the following are true:
 - `wgt` can open and save config from inside the TUI
 - `wgt` can launch native SSH for the selected target
 - `wgt` can open a tunnel form from the target browser and manage a single active tunnel from a dedicated page
-- keybindings are read from config rather than being hardwired, except for tunnel-page-local controls in v1
+- keybindings are read from config rather than being hardwired, except for documented page-local controls in v1

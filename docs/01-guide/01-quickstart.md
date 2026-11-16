@@ -62,14 +62,16 @@ Useful flags:
 wgt --help
 wgt --config /path/to/config.huml
 wgt --cache-path /path/to/cache-dir
+wgt --profile staging
 ```
 
-`--cache-path` only applies to the current run.
+`--cache-path` and `--profile` only apply to the current run.
 
 ## First run
 
 On first launch, `wgt` asks for:
 
+- profile name (initially `default`)
 - Warpgate server URL
 - Warpgate API token
 - SSH username
@@ -83,7 +85,13 @@ On Linux, that is usually:
 - config: `~/.config/wgt/config.huml`
 - cache and local state: `~/.cache/wgt/`
 
-The cache directory also stores recent targets and remembered transfer form state.
+Each profile has its own cached targets, recent targets, and remembered transfer form state under the cache directory.
+
+## Switch upstreams
+
+Press `p` in browse mode to open the profile picker. Use the arrow keys and Enter to switch, `n` to create a profile, or Escape to cancel. The header shows the active profile name, such as `default (profile)`. Press `e` to rename it or edit its settings.
+
+Startup prefers `--profile`, then the last used profile, then `default_profile`. Older configs become a profile named `default`. Migration and renaming keep originals and create backups with restore instructions; see [Configuration](../../reference/configuration/#backups-and-recovery).
 
 ## Browse and connect
 
@@ -102,7 +110,7 @@ Targets appear in a table above Details. Use Up/Down or `j` / `k` to select a ta
 
 The Details pane shows the selected target and SSH command. Use `alt+up` / `alt+down` to scroll long metadata in the bottom pane, and `c` to copy the full SSH command. Press `?` to expand keyboard help.
 
-Press `e` for settings. Target Columns lets you show, hide, and reorder columns with a live preview. Use `ctrl+s` to save. Display-only changes save offline; connection changes still require API validation.
+Press `e` for settings. Target Columns lets you show, hide, and reorder columns with a live preview. Use `ctrl+s` to save. Display-only changes and profile renames save offline; connection changes still require API validation. Navigation pauses while saving; `ctrl+c` waits for completion before exiting.
 
 See the [target browser walkthrough](../target-browser/) for the full flow.
 

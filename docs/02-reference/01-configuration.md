@@ -40,6 +40,8 @@ Each profile points at one Warpgate upstream and has its own `server` and `ssh` 
 - press `e` to edit, or rename, the active profile
 - profile names may only contain letters, digits, `-` and `_`; `last_profile` is reserved (regardless of case)
 
+The header shows the active name followed by `(profile)`, for example `default (profile)`. `default` is the name given to a migrated single-upstream config and can be renamed in `e`.
+
 In the picker, the arrow keys, `enter`, `n` and `esc` keep their displayed actions even if you use them for custom navigation elsewhere. Other configured up/down aliases also work.
 
 Renaming a profile without changing its connection settings works offline and preserves its cached targets. While a config save is running, navigation and further edits are paused. If you press `ctrl+c`, `wgt` finishes the save before exiting.
