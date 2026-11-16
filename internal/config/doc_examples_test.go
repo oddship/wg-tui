@@ -8,19 +8,22 @@ import (
 )
 
 func TestDocumentedConfigExamplesLoad(t *testing.T) {
-	for _, file := range []string{"README.md", "SPEC.md", "docs/02-reference/01-configuration.md"} {
+	for _, file := range []string{"docs/02-reference/01-configuration.md", "docs/_demo/fixtures/config.huml"} {
 		t.Run(file, func(t *testing.T) {
 			body, err := os.ReadFile(filepath.Join("../..", file))
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, rest, ok := strings.Cut(string(body), "```huml\n")
-			if !ok {
-				t.Fatal("missing HUML example")
-			}
-			example, _, ok := strings.Cut(rest, "```")
-			if !ok {
-				t.Fatal("unclosed example")
+			example := string(body)
+			if strings.HasSuffix(file, ".md") {
+				_, rest, ok := strings.Cut(example, "```huml\n")
+				if !ok {
+					t.Fatal("missing HUML example")
+				}
+				example, _, ok = strings.Cut(rest, "```")
+				if !ok {
+					t.Fatal("unclosed example")
+				}
 			}
 			path := filepath.Join(t.TempDir(), "config.huml")
 			if err := os.WriteFile(path, []byte(example), 0600); err != nil {

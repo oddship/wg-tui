@@ -19,7 +19,7 @@ The cache directory holds a `last_profile` file and one subdirectory per profile
 
 ## CLI overrides
 
-`wgt` also supports a few small CLI flags:
+`wgt --help` lists the supported flags:
 
 ```bash
 wgt --help
@@ -28,7 +28,7 @@ wgt --cache-path /path/to/cache-dir
 wgt --profile staging
 ```
 
-`--cache-path` and `--profile` only affect the current run. They do not rewrite `cache.dir` or `default_profile` in your saved config.
+`--config` selects the HUML file. `--cache-path` and `--profile` only affect the current run; they do not rewrite `cache.dir` or `default_profile`. If an explicitly named profile does not exist, `wgt` reports that it is using the configured default profile.
 
 ## Profiles
 
@@ -98,7 +98,6 @@ cache::
 
 ui::
   details_pane: "bottom"
-  preview_lines: 8
   target_fields: "description, group, kind"
   target_contrast: "normal"
   approval_open_mode: "ask"
@@ -154,24 +153,28 @@ keys::
 - `always` - open the approval URL right away
 - `never` - never open it automatically
 
-`ui.approval_open_command` is the command template used to open the URL. It must include `%s`, which `wgt` replaces with the approval URL.
+`ui.approval_open_command` is the command template used to open the URL. It must contain exactly one `%s`, which `wgt` replaces with the approval URL. Quotes can group arguments; the command is not run through a shell.
 
 Examples:
 
 - `xdg-open %s`
-- `open %s`
-- `firefox %s`
+- `open %s` on macOS (the default `xdg-open` is intended for Linux)
+- `firefox --new-window '%s'`
 
 ## Target list display
 
-Press `e` to edit settings. Details Position defaults to `bottom`, with Targets above Details. Choose `right` for side-by-side panes. Narrow terminals stack the panes in either mode.
+`ui.details_pane` is `bottom` by default. Set it to `right` for side-by-side panes on terminals at least 72 columns wide. Narrow terminals stack the panes in either mode. Existing configs with `right` keep their layout.
 
-Targets appear in a table. In Target Columns, use Up/Down to select a column, Space to show or hide it, and `-` / `+` to move it up or down. Name always stays enabled. Tab moves to the next setting.
+`ui.target_fields` controls table column order. Supported fields are `name`, `description`, `group`, and `kind`. The default is `description, group, kind`, with Name added first. Include `name` explicitly to move it, for example `kind, name, group, description`. Use `none` for Name only. Name is always included; unknown fields and duplicates are rejected.
 
-In the config file, `ui.target_fields` controls the column order: `name`, `description`, `group`, and `kind`. The default is `description, group, kind`, with Name added first. Include `name` explicitly to move it elsewhere, for example `kind, name, group, description`. Use `none` for Name only. Name is always included.
+`ui.target_contrast` accepts `normal` (the default terminal text color) or `subtle` (a secondary color adapted to the background). Missing cells display `-`; long cells are shortened. All metadata remains searchable even when its columns are hidden.
 
-Missing values appear as `-`. Long cells end with `…`. Column widths stay consistent while paging through results. When the pane is too narrow, trailing columns are hidden, with Name always retained. The selected target's details appear in the Details pane. In the bottom pane, use `alt+up` / `alt+down` to scroll through wrapped metadata and descriptions. The SSH command stays visible while scrolling. Recently used names have a `↺` marker.
+The legacy `ui.preview_lines` field is retained when saving config, but current pane heights follow the terminal layout. It does not control the visible number of detail rows.
 
-Target Metadata Brightness defaults to `normal`, which uses the terminal's text color. Choose `subtle` for secondary text that adapts to light and dark backgrounds. Selected rows use the selection color throughout.
+Press `e` to change display settings with a live preview. See [Target browser](../../guide/target-browser/) for the editor workflow and [Keyboard reference](../keyboard/) for controls.
 
-A sample table previews changes while you edit the column order or brightness. Press `Ctrl+S` to validate and save. Display-only changes save locally without contacting Warpgate. Changes to connection settings still require API validation. Invalid column names and duplicates show an error before saving. Config files without display settings use these defaults. An existing `details_pane: "right"` setting keeps the side-by-side layout.
+## Keybindings
+
+The `keys` map in the example lists the configurable browse actions. Edit it in the HUML file and restart; the in-app editor does not edit keybindings. Global conflicts and empty bindings are rejected.
+
+For older configs, the implicit tunnel (`t`), transfer (`s`), or profile (`p`) shortcut stays disabled when another action already uses that key. Assign `keys.tunnel`, `keys.rsync`, or `keys.profile` explicitly to enable it with a different key. Page-local controls remain as documented in the [keyboard reference](../keyboard/).

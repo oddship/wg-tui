@@ -42,4 +42,4 @@ Press `r` to refresh. Refresh preserves the selected target by name. If it disap
 
 Fresh cached targets remain usable offline. Stale targets remain available only when `cache.use_stale_on_error` is enabled and the snapshot is within `cache.max_age`. Expired snapshots are discarded and trigger a refresh, even when `cache.ttl` is longer than `cache.max_age`.
 
-See [Configuration](../../reference/configuration/) for the saved fields and cache settings.
+See [Configuration](../../reference/configuration/) for saved fields and cache settings, [Connections](../connections/) for tunnels and transfers, and the [keyboard reference](../../reference/keyboard/) for all controls.

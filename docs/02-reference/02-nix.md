@@ -1,55 +1,57 @@
 # Nix
 
-`wgt` ships a flake with:
+The flake supports `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, and `aarch64-darwin`. Enable Nix's `nix-command` and `flakes` experimental features if your installation requires it.
 
-- `packages.<system>.default`
-- `apps.<system>.default`
-- `devShells.<system>.default`
-- `devShells.<system>.docs` for the screenshot and animation toolchain
-
-## Run
+## Run or build
 
 ```bash
 nix run github:oddship/wg-tui
-```
-
-## Build
-
-```bash
 nix build github:oddship/wg-tui
 ```
 
+`nix run` starts the TUI. `nix build` creates `result/bin/wgt`.
+
+## Flake outputs
+
+- `packages.<system>.default`: the application package
+- `apps.<system>.default`: the runnable application
+- `devShells.<system>.default`: Go development tools
+- `devShells.<system>.docs`: screenshot and animation tools
+
+For local development, use `nix develop`. See [Contributing](../../development/contributing/) and the [capture guide](../../development/docs-capture-pipeline/).
+
 ## Use in your own flake
+
+This minimal flake re-exports the package for one system:
 
 ```nix
 {
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    wg-tui.url = "github:oddship/wg-tui";
-  };
+  inputs.wg-tui.url = "github:oddship/wg-tui";
 
-  outputs = { self, nixpkgs, wg-tui, ... }:
-    let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-    in {
-      packages.${system}.default = wg-tui.packages.${system}.default;
-    };
+  outputs = { wg-tui, ... }: {
+    packages.x86_64-linux.default = wg-tui.packages.x86_64-linux.default;
+  };
 }
 ```
 
-## Add to NixOS or Home Manager
+To install it through an existing NixOS or Home Manager setup, add the input to your flake and pass `wg-tui` into the module with `specialArgs` (NixOS) or `extraSpecialArgs` (Home Manager).
 
-Inside a flake-based setup, add:
+A NixOS module can then use:
 
 ```nix
-wg-tui.packages.${pkgs.system}.default
+{ pkgs, wg-tui, ... }: {
+  environment.systemPackages = [
+    wg-tui.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+}
 ```
 
-For example:
+In a Home Manager module, use the same package in `home.packages`:
 
 ```nix
-environment.systemPackages = [
-  wg-tui.packages.${pkgs.system}.default
-];
+{ pkgs, wg-tui, ... }: {
+  home.packages = [
+    wg-tui.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+}
 ```

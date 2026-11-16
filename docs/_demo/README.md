@@ -1,54 +1,7 @@
-# Docs capture pipeline
+# Documentation capture inputs
 
-This directory holds the versioned inputs for regenerating `wg-tui` README and published docs media.
+This private directory contains the fixture config, target catalog, saved state, theme, and [asset manifest](manifest.md) used by `cmd/wgt-docs`.
 
-## What is versioned here
-- `manifest.md` - scenario and asset contract
-- `fixtures/targets.json` - fixed target catalog
-- `fixtures/state.json` - fixed recent-target and transfer draft state
-- `fixtures/config.huml` - fixed config used for previews and forms
-- `vhs-theme.json` - pinned terminal theme used by VHS renders
+See the [capture guide](../04-development/03-docs-capture-pipeline.md) for tool requirements, regeneration commands, and timing validation. Keep scenario names and output filenames in `internal/ui/doc_capture.go`; do not duplicate the registry here.
 
-## Recapture
-
-From repo root:
-
-```bash
-./scripts/capture-docs.sh
-```
-
-If the local machine does not already have the docs toolchain installed, the script re-enters a pinned Nix shell with:
-- `vhs`
-- `ttyd`
-- `ffmpeg`
-- `chromium`
-- `jetbrains-mono`
-- `fontconfig`
-
-The script:
-- builds the docs-only helper binary from `cmd/wgt-docs`
-- asks that helper to generate VHS tapes and the overview timing manifest from the authoritative scenario registry in `internal/ui/doc_capture.go`
-- writes intermediates under `${BOSUN_WORKSPACE:-workspace}/scratch/wg-tui-doc-capture/`
-- writes final assets to `docs/_static/assets/`
-- keeps `PNG` stills plus `GIF`, `MP4`, and `WebM` variants for the animated overview
-- captures screenshots through VHS from a real xterm.js terminal surface, then encodes the overview from those captures with explicit scene durations
-
-Each overview screen is held for five seconds, for a 25-second loop. The script checks GIF, MP4, and WebM durations against the generated timeline so a slow recorder cannot shorten the pauses.
-
-## Validate capture scenarios
-
-To check fixture loading and write ANSI captures without running VHS:
-
-```bash
-WG_TUI_CAPTURE_OUT=/tmp/wgt-doc-captures go test ./internal/ui -run TestDocCaptureScenarios -count=1
-```
-
-This uses the same scenario registry as the screenshots. It includes the default bottom layout, the profile picker, and the target-column editor, so fixture or rendering changes can be checked before regenerating media.
-
-## Notes
-- The product-facing `wgt` CLI stays unchanged. `cmd/wgt-docs` exists only to launch deterministic mocked UI states for docs capture.
-- Scenario names, VHS wait patterns, grouping, screenshot filenames, and the tour sequence all come from the single registry in `internal/ui/doc_capture.go`.
-- The target-columns scenario captures the visibility and ordering controls with their live preview. Browse captures use the default bottom Details layout.
-- Search and similar flows are replayed through real model key handling, not hand-drawn mockups.
-- If the UI changes, update `manifest.md` and the scenario registry together so regenerated assets keep stable names and coverage.
-- This directory is intentionally prefixed with `_` so moat skips it during page generation while keeping the capture inputs versioned next to the docs.
+The `_` prefix keeps these inputs out of the published site.

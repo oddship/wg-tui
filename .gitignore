@@ -17,6 +17,7 @@ coverage.out
 *.log
 
 # Local cache and temp
+/workspace/
 .cache/
 .tmp/
 .codex

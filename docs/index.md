@@ -1,72 +1,29 @@
 ---
 title: wgt
 layout: landing
-description: Browse Warpgate targets, search locally, reconnect faster with recent targets, launch SSH, open tunnels, and run file transfers.
+description: Browse Warpgate targets, search locally, connect with SSH, open tunnels, and transfer files from the terminal.
 ---
 
 # wgt
 
-<h3 class="tagline text-light">Warpgate target picker for the terminal.</h3>
+A terminal launcher for [Warpgate](https://github.com/warp-tech/warpgate) targets, with local search, cached targets, and separate upstream profiles.
 
-<div class="hstack">
-  <a href="guide/quickstart/" class="button">Get started</a>
-  <a href="https://github.com/oddship/wg-tui" class="button outline">GitHub</a>
-</div>
+![wgt overview](_static/assets/wgt-overview.gif)
 
-<br>
+## Get started
 
-## Quick look
+Install a [release binary](guide/install-from-release/) or [run with Nix](reference/nix/), then follow the [quickstart](guide/quickstart/). Onboarding sets up your API token and SSH username; `wgt` uses your system SSH client for connections.
 
-![wg-tui overview](_static/assets/wgt-overview.gif)
+## Guides and reference
 
-![wg-tui column settings](_static/assets/wgt-target-columns.png)
+- [Target browser and settings](guide/target-browser/): search, selection, profiles, table columns, and layout.
+- [SSH, tunnels, and transfers](guide/connections/): approval links, local forwards, `rsync`, and `scp`.
+- [Configuration](reference/configuration/): HUML fields, profile selection, cache policy, and backup recovery.
+- [Keyboard reference](reference/keyboard/): defaults and mode-specific controls.
+- [Changelog](changelog/): released and unreleased changes.
 
-![wg-tui tunnel form](_static/assets/wgt-tunnel-form.png)
+## Development
 
-![wg-tui transfer form](_static/assets/wgt-transfer-form.png)
+Read [Architecture](development/architecture/), [Contributing](development/contributing/), and the [docs capture guide](development/docs-capture-pipeline/).
 
-<div class="features">
-<article class="card">
-<header><h3>Cache-first</h3></header>
-
-Loads usable cached targets and refreshes stale data in the background when the cache policy allows it.
-</article>
-
-<article class="card">
-<header><h3>Local search</h3></header>
-
-Fuzzy search runs locally so target discovery stays fast once cached, and recently used targets float to the top.
-</article>
-
-<article class="card">
-<header><h3>Native SSH</h3></header>
-
-Launches your system `ssh` client using Warpgate's username plus target format and can open approval links locally when a connect needs it.
-</article>
-
-<article class="card">
-<header><h3>Tunnels</h3></header>
-
-Open local forwards through Warpgate from inside the TUI and manage them from a dedicated screen.
-</article>
-
-<article class="card">
-<header><h3>Profiles</h3></header>
-
-Switch Warpgate upstreams with `p`. Each profile keeps its own connection settings, cached targets, and transfer drafts.
-</article>
-
-<article class="card">
-<header><h3>Transfers</h3></header>
-
-Run `rsync` or `scp` uploads and downloads through Warpgate without leaving the TUI.
-</article>
-</div>
-
-## What it does
-
-`wgt` fetches Warpgate targets using an API token, caches them locally, lets you search them in a terminal UI, brings recent targets back to the top, launches SSH for the selected target, can open local tunnels through Warpgate, and can run quick file transfers through the selected target.
-
-## Status
-
-Early but usable. Current focus is fast target discovery, cleaner SSH approval handoff, simple service tunneling, and practical transfer workflows.
+[Source on GitHub](https://github.com/oddship/wg-tui)
