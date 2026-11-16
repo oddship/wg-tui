@@ -65,7 +65,9 @@ func TestRefreshBeforeEditingSameProfileIsRejected(t *testing.T) {
 	cfg.Server.URL = "https://replacement.example.com"
 	cfg.SSH.Host = "replacement.example.com"
 	cfg.CommitActive()
-	anyModel, _ := m.handleConfigSaved(configSavedMsg{cfg: cfg, snapshot: cache.Snapshot{FetchedAt: time.Now(), Targets: []api.Target{{Name: "replacement-db"}}}})
+	saving, _ := m.beginConfigSave(cfg)
+	m = saving.(Model)
+	anyModel, _ := m.handleConfigSaved(configSavedMsg{generation: m.configSaveGeneration, cfg: cfg, snapshot: cache.Snapshot{FetchedAt: time.Now(), Targets: []api.Target{{Name: "replacement-db"}}}})
 	m = anyModel.(Model)
 	anyModel, _ = m.handleRefresh(old)
 	m = anyModel.(Model)

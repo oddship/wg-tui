@@ -135,14 +135,8 @@ func TestLegacyMigrationFailureUsesOriginalDataAndWarns(t *testing.T) {
 }
 
 func TestRenamePersistsStateWithBackupAndRecoveryNotice(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/info") {
-			_, _ = w.Write([]byte(`{}`))
-		} else {
-			_, _ = w.Write([]byte(`[{"name":"prod-db"}]`))
-		}
-	}))
-	defer server.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("name-only rename contacted upstream") }))
+	server.Close()
 	m := multiProfileModel(t)
 	m.cacheDirOverride = t.TempDir()
 	m.cfgPath = filepath.Join(t.TempDir(), "config.huml")
@@ -154,18 +148,25 @@ func TestRenamePersistsStateWithBackupAndRecoveryNotice(t *testing.T) {
 	m.recentTargets = []string{"prod-db"}
 	m.rsyncLastRemotePath = "/saved"
 	m.persistState()
-	m.startForm(true)
+	m.applySnapshot(cache.Snapshot{FetchedAt: time.Now(), Targets: []api.Target{{Name: "prod-db"}}})
+	originalSnapshot := m.snapshot
+	m.openConfigEditor()
 	requireField(t, m.fields, "profile.name").input.SetValue("production")
 	cfg, err := m.formConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	msg := validateAndSaveCmd(m.cfgPath, cfg, m.cacheDirOverride, m.formProfile, m.stateSnapshot())().(configSavedMsg)
+	saving, save := m.beginConfigSave(cfg)
+	m = saving.(Model)
+	msg := save().(configSavedMsg)
 	if msg.err != nil {
 		t.Fatal(msg.err)
 	}
 	updated, _ := m.handleConfigSaved(msg)
 	m = updated.(Model)
+	if !msg.localOnly || !m.snapshot.FetchedAt.Equal(originalSnapshot.FetchedAt) || len(m.filtered) != 1 || m.filtered[0].Name != "prod-db" {
+		t.Fatal("offline rename replaced the current snapshot")
+	}
 	reloaded := loadCmd(m.cfgPath, m.cacheDirOverride, "")().(loadedMsg)
 	if reloaded.err != nil || reloaded.cfg.Profile != "production" || len(reloaded.state.RecentTargets) != 1 || reloaded.state.Transfer.RemotePath != "/saved" {
 		t.Fatalf("rename lost state on restart: %#v", reloaded)

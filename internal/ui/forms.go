@@ -164,6 +164,9 @@ func newTextInput(value string) textinput.Model {
 }
 
 func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.configSaving {
+		return m, nil
+	}
 	current := m.currentField()
 	if len(current.columns) > 0 {
 		switch msg.String() {
@@ -213,8 +216,7 @@ func (m Model) updateConfigForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.formStatus = err.Error()
 			return m, nil
 		}
-		m.formStatus = "saving config..."
-		return m, m.saveConfigCmd(cfg)
+		return m.beginConfigSave(cfg)
 	}
 
 	var cmd tea.Cmd

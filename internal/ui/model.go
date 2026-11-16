@@ -35,16 +35,19 @@ const (
 )
 
 type Model struct {
-	cfgPath          string
-	cacheDirOverride string
-	profileOverride  string
-	profileLoading   bool
-	startupBlocked   bool
-	recoveryNotice   string
-	cfg              cfgpkg.Config
-	keys             cfgpkg.KeyMap
-	client           *api.Client
-	tunnel           tunnelSession
+	cfgPath              string
+	cacheDirOverride     string
+	profileOverride      string
+	profileLoading       bool
+	configSaving         bool
+	configSaveGeneration uint64
+	quitAfterConfigSave  bool
+	startupBlocked       bool
+	recoveryNotice       string
+	cfg                  cfgpkg.Config
+	keys                 cfgpkg.KeyMap
+	client               *api.Client
+	tunnel               tunnelSession
 
 	searchBox     textinput.Model
 	searchFocused bool
@@ -117,12 +120,13 @@ type refreshMsg struct {
 }
 
 type configSavedMsg struct {
-	localOnly bool
-	cfg       cfgpkg.Config
-	snapshot  cache.Snapshot
-	status    string
-	err       error
-	notice    string
+	generation uint64
+	localOnly  bool
+	cfg        cfgpkg.Config
+	snapshot   cache.Snapshot
+	status     string
+	err        error
+	notice     string
 }
 
 const (
@@ -195,6 +199,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case rsyncFinishedMsg:
 		return m.handleRsyncFinished(msg)
 	case tea.KeyMsg:
+		if m.configSaving {
+			if msg.String() == "ctrl+c" {
+				m.quitAfterConfigSave = true
+				m.formStatus = "finishing config save before exit..."
+			}
+			return m, nil
+		}
 		if msg.String() == "ctrl+c" {
 			m.stopTunnel()
 			return m, tea.Quit
@@ -291,10 +302,20 @@ func (m Model) handleRefresh(msg refreshMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
+	if !m.configSaving || msg.generation != m.configSaveGeneration {
+		return m, nil
+	}
+	m.configSaving = false
+	var cmd tea.Cmd
+	if m.quitAfterConfigSave {
+		m.quitAfterConfigSave = false
+		_ = m.stopTunnel()
+		cmd = tea.Quit
+	}
 	if msg.err != nil {
 		m.formStatus = msg.err.Error()
 		m.status = msg.err.Error()
-		return m, nil
+		return m, cmd
 	}
 
 	newProfile := msg.cfg.Profile != m.cfg.Profile && m.formProfile == ""
@@ -312,7 +333,7 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 	m.status = msg.status
 	m.mode = modeBrowse
 	m.formStatus = ""
-	return m, nil
+	return m, cmd
 }
 
 func (m Model) handleSSHFinished(msg sshpkg.ExecFinishedMsg) (tea.Model, tea.Cmd) {
@@ -759,19 +780,58 @@ func refreshCmd(profile string, client *api.Client) tea.Cmd {
 	}
 }
 
-// Local preferences do not require a working API connection.
+// beginConfigSave allows one save at a time, including its disk writes.
+func (m Model) beginConfigSave(cfg cfgpkg.Config) (tea.Model, tea.Cmd) {
+	if m.configSaving {
+		return m, nil
+	}
+	m.configSaving = true
+	m.configSaveGeneration++
+	m.formStatus = "saving config... navigation is paused until the save finishes"
+	generation := m.configSaveGeneration
+	save := m.saveConfigCmd(cfg)
+	return m, func() tea.Msg {
+		msg := save().(configSavedMsg)
+		msg.generation = generation
+		return msg
+	}
+}
+
+// Local preferences, including profile names, do not require the API.
 func (m Model) saveConfigCmd(cfg cfgpkg.Config) tea.Cmd {
 	previous := m.cfg
 	_ = deriveSSHHost(&previous)
-	if m.mode == modeConfig && cfg.Profile == previous.Profile && reflect.DeepEqual(previous.Server, cfg.Server) && reflect.DeepEqual(previous.SSH, cfg.SSH) {
+	rootDir, oldProfile, state := resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride), m.formProfile, m.stateSnapshot()
+	if m.mode == modeConfig && oldProfile != "" && reflect.DeepEqual(previous.Server, cfg.Server) && reflect.DeepEqual(previous.SSH, cfg.SSH) {
 		return func() tea.Msg {
-			if err := cfgpkg.Save(m.cfgPath, cfg); err != nil {
-				return configSavedMsg{err: err}
-			}
-			return configSavedMsg{cfg: cfg, localOnly: true, status: "config saved"}
+			msg := persistConfig(m.cfgPath, cfg, rootDir, oldProfile, state)
+			msg.localOnly = true
+			msg.status = "config saved"
+			return msg
 		}
 	}
-	return validateAndSaveCmd(m.cfgPath, cfg, resolveCacheDir(m.cfg.Cache.Dir, m.cacheDirOverride), m.formProfile, m.stateSnapshot())
+	return validateAndSaveCmd(m.cfgPath, cfg, rootDir, oldProfile, state)
+}
+
+// Both local saves and validated connection changes use the same backup and
+// profile-state transaction.
+func persistConfig(cfgPath string, cfg cfgpkg.Config, rootDir, oldProfile string, state cache.State) configSavedMsg {
+	notice, renamedDir := "", ""
+	if oldProfile != "" && oldProfile != cfg.Profile {
+		renamedDir = profileCacheDir(rootDir, cfg.Profile)
+		backup, err := cache.CopyProfile(rootDir, cfgPath, profileCacheDir(rootDir, oldProfile), renamedDir, &state)
+		if err != nil {
+			return configSavedMsg{err: fmt.Errorf("rename stopped: %w (backup: %s)", err, backup)}
+		}
+		notice = recoveryMessage(backup)
+	}
+	if err := cfgpkg.Save(cfgPath, cfg); err != nil {
+		if renamedDir != "" {
+			_ = os.RemoveAll(renamedDir)
+		}
+		return configSavedMsg{err: err}
+	}
+	return configSavedMsg{cfg: cfg, notice: notice}
 }
 
 func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config, rootDir, oldProfile string, state cache.State) tea.Cmd {
@@ -790,29 +850,13 @@ func validateAndSaveCmd(cfgPath string, cfg cfgpkg.Config, rootDir, oldProfile s
 		}
 
 		snap := cache.Snapshot{FetchedAt: time.Now(), Info: info, Targets: targets}
-		notice := ""
-		renamedDir := ""
-		if oldProfile != "" && oldProfile != cfg.Profile {
-			renamedDir = profileCacheDir(rootDir, cfg.Profile)
-			backup, err := cache.CopyProfile(rootDir, cfgPath, profileCacheDir(rootDir, oldProfile), renamedDir, &state)
-			if err != nil {
-				return configSavedMsg{err: fmt.Errorf("rename stopped: %w (backup: %s)", err, backup)}
-			}
-			notice = recoveryMessage(backup)
+		msg := persistConfig(cfgPath, cfg, rootDir, oldProfile, state)
+		if msg.err != nil {
+			return msg
 		}
-		if err := cfgpkg.Save(cfgPath, cfg); err != nil {
-			if renamedDir != "" {
-				_ = os.RemoveAll(renamedDir)
-			}
-			return configSavedMsg{err: err}
-		}
-
-		return configSavedMsg{
-			notice:   notice,
-			cfg:      cfg,
-			snapshot: snap,
-			status:   fmt.Sprintf("config saved - loaded %d targets", len(targets)),
-		}
+		msg.snapshot = snap
+		msg.status = fmt.Sprintf("config saved - loaded %d targets", len(targets))
+		return msg
 	}
 }
 
@@ -970,7 +1014,8 @@ func (m Model) viewTopChrome(title, summary string, bindings []key.Binding) stri
 		modeActiveStyle.Render(m.currentPageLabel()),
 	)
 	if m.showProfileBadge() {
-		header = lipgloss.JoinHorizontal(lipgloss.Center, header, " ", modeInactiveStyle.Render(m.cfg.Profile))
+		label := m.cfg.Profile + " (profile)"
+		header = lipgloss.JoinHorizontal(lipgloss.Center, header, " ", modeInactiveStyle.Render(label))
 	}
 	rows := []string{header}
 	if strings.TrimSpace(summary) != "" {

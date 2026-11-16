@@ -31,14 +31,19 @@ func (m Model) updateProfilePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case msg.String() == "esc":
 		m.mode = modeBrowse
 		m.status = "profile switch cancelled"
-	case key.Matches(msg, m.keys.Up):
-		m.profileIndex = clamp(m.profileIndex-1, 0, len(options)-1)
-	case key.Matches(msg, m.keys.Down):
-		m.profileIndex = clamp(m.profileIndex+1, 0, len(options)-1)
 	case msg.String() == "n":
 		m.startNewProfileForm()
 	case msg.String() == "enter" && len(options) > 0:
 		return m.switchProfile(options[m.profileIndex])
+	// Picker actions and native arrows take precedence over custom aliases.
+	case msg.String() == "up":
+		m.profileIndex = clamp(m.profileIndex-1, 0, len(options)-1)
+	case msg.String() == "down":
+		m.profileIndex = clamp(m.profileIndex+1, 0, len(options)-1)
+	case key.Matches(msg, m.keys.Up):
+		m.profileIndex = clamp(m.profileIndex-1, 0, len(options)-1)
+	case key.Matches(msg, m.keys.Down):
+		m.profileIndex = clamp(m.profileIndex+1, 0, len(options)-1)
 	}
 	return m, nil
 }
