@@ -42,7 +42,7 @@ detect_browser() {
 }
 
 has_capture_tools() {
-  command -v go >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && command -v vhs >/dev/null 2>&1 && command -v ttyd >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1 && detect_browser >/dev/null 2>&1
+  command -v go >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 && command -v vhs >/dev/null 2>&1 && command -v ttyd >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1 && detect_browser >/dev/null 2>&1
 }
 
 ensure_capture_environment() {
@@ -96,6 +96,33 @@ main() {
   )
 
   rm -f "$SCRATCH_DIR"/extras.gif
+
+  # VHS can capture below its requested frame rate on a busy machine, which
+  # compresses wall-clock sleeps. Encode the captured screens using the scene
+  # registry's explicit durations instead of the number of captured frames.
+  local overview_manifest="$TAPE_DIR/overview.ffconcat"
+  local overview_duration
+  overview_duration="$(sed -n 's/^# total-duration-seconds //p' "$overview_manifest")"
+  echo "Encoding overview with explicit scene timing ($overview_duration seconds)"
+  ffmpeg -hide_banner -loglevel error -y -f concat -safe 0 -i "$overview_manifest" \
+    -t "$overview_duration" -filter_complex 'fps=10,split[a][b];[a]palettegen[p];[b][p]paletteuse' \
+    -fps_mode cfr -loop 0 "$ASSET_DIR/wgt-overview.gif"
+  ffmpeg -hide_banner -loglevel error -y -f concat -safe 0 -i "$overview_manifest" \
+    -t "$overview_duration" -vf fps=10 -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart \
+    "$ASSET_DIR/wgt-overview.mp4"
+  ffmpeg -hide_banner -loglevel error -y -f concat -safe 0 -i "$overview_manifest" \
+    -t "$overview_duration" -vf fps=10 -c:v libvpx-vp9 -pix_fmt yuv420p -crf 30 -b:v 0 \
+    "$ASSET_DIR/wgt-overview.webm"
+  local format actual_duration
+  for format in gif mp4 webm; do
+    actual_duration="$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$ASSET_DIR/wgt-overview.$format")"
+    python3 - "$overview_duration" "$actual_duration" "$format" <<'PY_CHECK'
+import sys
+expected, actual = map(float, sys.argv[1:3])
+if abs(expected - actual) > 0.2:
+    raise SystemExit(f"{sys.argv[3]} duration {actual}s does not match the {expected}s overview timeline")
+PY_CHECK
+  done
 
   echo
   echo "Generated assets:"

@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -82,8 +83,8 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		WaitPattern: "Browse targets",
 		Screenshot:  "wgt-browse-overview.png",
 		Group:       docCaptureVHSOverview,
-		ShowSleep:   "450ms",
-		HoldSleep:   "900ms",
+		ShowSleep:   "1s",
+		HoldSleep:   "4s",
 		TourOrder:   1,
 		BuildModel:  docCaptureBrowseOverviewModel,
 	},
@@ -92,8 +93,8 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		WaitPattern: "search> prod",
 		Screenshot:  "wgt-search-prod.png",
 		Group:       docCaptureVHSOverview,
-		ShowSleep:   "450ms",
-		HoldSleep:   "900ms",
+		ShowSleep:   "1s",
+		HoldSleep:   "4s",
 		TourOrder:   2,
 		BuildModel:  docCaptureSearchProdModel,
 	},
@@ -138,8 +139,8 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		WaitPattern: "Open Tunnel",
 		Screenshot:  "wgt-tunnel-form.png",
 		Group:       docCaptureVHSOverview,
-		ShowSleep:   "450ms",
-		HoldSleep:   "950ms",
+		ShowSleep:   "1s",
+		HoldSleep:   "4s",
 		TourOrder:   3,
 		BuildModel:  docScenarioTunnelFormModel,
 	},
@@ -148,8 +149,8 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		WaitPattern: "Transfer - prod-reporting-db",
 		Screenshot:  "wgt-transfer-form.png",
 		Group:       docCaptureVHSOverview,
-		ShowSleep:   "450ms",
-		HoldSleep:   "950ms",
+		ShowSleep:   "1s",
+		HoldSleep:   "4s",
 		TourOrder:   4,
 		BuildModel:  docScenarioTransferFormModel,
 	},
@@ -158,8 +159,8 @@ var docCaptureSceneRegistry = []docCaptureSceneSpec{
 		WaitPattern: "tunnel open:",
 		Screenshot:  "wgt-tunnel-status.png",
 		Group:       docCaptureVHSOverview,
-		ShowSleep:   "450ms",
-		HoldSleep:   "950ms",
+		ShowSleep:   "1s",
+		HoldSleep:   "4s",
 		TourOrder:   5,
 		BuildModel:  docScenarioTunnelStatusModel,
 	},
@@ -233,6 +234,9 @@ func WriteDocCaptureVHSTapes(dir, binaryPath, assetDir, scratchDir string) error
 	}
 
 	if err := writeDocCaptureOverviewTape(filepath.Join(dir, "overview.tape"), binaryPath, filepath.ToSlash(assetDir), themeJSON); err != nil {
+		return err
+	}
+	if err := writeDocCaptureOverviewManifest(filepath.Join(dir, "overview.ffconcat"), assetDir); err != nil {
 		return err
 	}
 	if err := writeDocCaptureExtrasTape(filepath.Join(dir, "extras.tape"), binaryPath, filepath.ToSlash(assetDir), filepath.ToSlash(scratchDir), themeJSON); err != nil {
@@ -353,6 +357,43 @@ func writeDocCaptureOverviewTape(path, binaryPath, assetDir, themeJSON string) e
 	return os.WriteFile(path, []byte(b.String()), 0o600)
 }
 
+// Explicit timestamps keep static scenes readable even when a busy machine
+// captures fewer VHS frames than its requested frame rate.
+func writeDocCaptureOverviewManifest(path, assetDir string) error {
+	assetDir, err := filepath.Abs(assetDir)
+	if err != nil {
+		return err
+	}
+	var scenes strings.Builder
+	var total time.Duration
+	for _, spec := range docCaptureGroupSpecs(docCaptureVHSOverview) {
+		show, err := time.ParseDuration(spec.ShowSleep)
+		if err != nil {
+			return err
+		}
+		hold, err := time.ParseDuration(spec.HoldSleep)
+		if err != nil {
+			return err
+		}
+		duration := show + hold
+		if duration <= 0 {
+			return fmt.Errorf("nonpositive overview duration for %s", spec.Name)
+		}
+		total += duration
+		imagePath := strings.ReplaceAll(filepath.ToSlash(filepath.Join(assetDir, spec.Screenshot)), "'", "'\\''")
+		fmt.Fprintf(&scenes, "file '%s'\nduration %.3f\n", imagePath, duration.Seconds())
+	}
+	specs := docCaptureGroupSpecs(docCaptureVHSOverview)
+	if len(specs) == 0 {
+		return fmt.Errorf("no overview scenes")
+	}
+	lastPath := strings.ReplaceAll(filepath.ToSlash(filepath.Join(assetDir, specs[len(specs)-1].Screenshot)), "'", "'\\''")
+	// A final duplicate makes ffmpeg honor the last scene's duration.
+	fmt.Fprintf(&scenes, "file '%s'\n", lastPath)
+	data := fmt.Sprintf("ffconcat version 1.0\n# total-duration-seconds %.3f\n%s", total.Seconds(), scenes.String())
+	return os.WriteFile(path, []byte(data), 0o600)
+}
+
 func writeDocCaptureExtrasTape(path, binaryPath, assetDir, scratchDir, themeJSON string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Output %s\n", filepath.ToSlash(filepath.Join(scratchDir, "extras.gif")))
@@ -371,7 +412,7 @@ func writeDocCaptureVHSSettings(b *strings.Builder, settings docCaptureVHSSettin
 	fmt.Fprintf(b, "Set Height %d\n", settings.Height)
 	fmt.Fprintf(b, "Set Theme %s\n", themeJSON)
 	b.WriteString("Set TypingSpeed 0ms\n")
-	b.WriteString("Set CursorBlink false\n")
+	b.WriteString("Set CursorBlink false\nSet Framerate 10\n")
 }
 
 func writeDocCaptureVHSScene(b *strings.Builder, spec docCaptureSceneSpec, binaryPath, assetDir string) {

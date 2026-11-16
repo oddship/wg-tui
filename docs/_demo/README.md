@@ -27,11 +27,13 @@ If the local machine does not already have the docs toolchain installed, the scr
 
 The script:
 - builds the docs-only helper binary from `cmd/wgt-docs`
-- asks that helper to generate the VHS tapes from the authoritative scenario registry in `internal/ui/doc_capture.go`
+- asks that helper to generate VHS tapes and the overview timing manifest from the authoritative scenario registry in `internal/ui/doc_capture.go`
 - writes intermediates under `${BOSUN_WORKSPACE:-workspace}/scratch/wg-tui-doc-capture/`
 - writes final assets to `docs/_static/assets/`
 - keeps `PNG` stills plus `GIF`, `MP4`, and `WebM` variants for the animated overview
-- renders screenshots and recordings through VHS so the published assets come from a real xterm.js terminal surface instead of ANSI-to-SVG conversion
+- captures screenshots through VHS from a real xterm.js terminal surface, then encodes the overview from those captures with explicit scene durations
+
+Each overview screen is held for five seconds, for a 25-second loop. The script checks GIF, MP4, and WebM durations against the generated timeline so a slow recorder cannot shorten the pauses.
 
 ## Validate capture scenarios
 

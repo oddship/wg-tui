@@ -8,6 +8,7 @@ This directory defines the versioned inputs and expected outputs for the local d
 - Authoritative scenario registry: `internal/ui/doc_capture.go`
 - Render surface: VHS driving `ttyd` and capturing the xterm.js canvas in Chromium
 - Overview layout: `JetBrains Mono`, `19px`, line height `1.05`, `1600x860`
+- Overview timing: five seconds per scene, 25 seconds total, encoded from explicit timestamps
 - Form layout: `JetBrains Mono`, `17px`, line height `1.05`, `1600x1100`
 - Default browse layout: Targets table above scrollable Details
 - Header: active profile name followed by `(profile)`
@@ -46,6 +47,8 @@ This directory defines the versioned inputs and expected outputs for the local d
 ## Tape behavior
 - `cmd/wgt-docs --write-vhs-tapes` generates the VHS tapes directly from the scenario registry, so the script does not maintain a second hand-written list.
 - The overview render hides shell setup between scenes so the published animation only shows the TUI states.
+- The registry also generates `overview.ffconcat`, which gives each captured overview screen an explicit duration. FFmpeg uses this timeline for GIF, MP4, and WebM so missed recorder frames cannot speed up playback.
+- The capture script checks each exported duration against the timeline and fails when it differs by more than 0.2 seconds.
 - The same overview tape also captures the browse, search, tunnel, transfer, and tunnel-status PNG stills.
 - A second pass captures onboarding, profile-picker, config-editor, and target-column PNG stills.
 
